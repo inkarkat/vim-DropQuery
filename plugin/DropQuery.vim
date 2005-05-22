@@ -6,15 +6,30 @@
 
 " Avoid installing twice or when in compatible mode
 if exists("loaded_dropquery")
-    "TODO finish
+    finish
 endif
 let loaded_dropquery = 1
 
+"-- global configuration ------------------------------------------------------
 if !exists("g:dropqueryRemapDrop")
+    " If set, remaps the built-in ':drop' command to use ':Drop' instead. 
+    " With this option, other integrations (e.g. VisVim) need not be modified to
+    " use the dropquery functionality. 
     let g:dropqueryRemapDrop = 1
 endif
 
-"------------------------------------------------------------------------------
+if !exists("g:dropqueryNoDialog")
+    " If set, never uses a pop-up dialog in the GUI VIM. Instead, a textual
+    " query (as is done in the console VIM) is used. 
+    let g:dropqueryNoDialog = 0
+endif
+
+"-- commands ------------------------------------------------------------------
+" Note to -nargs=1: 
+" :drop supports passing of multiple files, which are then added to the
+" argument-list. This functionality cannot be supported, because the filespecs
+" to :drop are not enclosed by double quotes, but have escaped spaces instead. 
+" Fortunately, this functionality is seldomly used. 
 :command! -nargs=1 -complete=file Drop call <SID>Drop(<f-args>)
 
 if g:dropqueryRemapDrop
@@ -22,7 +37,7 @@ if g:dropqueryRemapDrop
 endif
 
 
-"------------------------------------------------------------------------------
+"-- functions -----------------------------------------------------------------
 function! s:Drop( filespec )
     let l:currentBufNr = bufnr("%")
     let l:isEmptyEditor = ( 
@@ -50,6 +65,15 @@ function! s:Drop( filespec )
 	let l:dropActionCommand = ":vsplit" . " " . a:filespec
     elseif l:dropActionNr == 4
 	let l:dropActionCommand = ":pedit" . " " . a:filespec
+    elseif l:dropActionNr == 5
+	let l:dropActionCommand = ":argedit" . " " . escape( a:filespec, ' ' )
+    elseif l:dropActionNr == 6
+	let l:dropActionCommand = ":argadd" . " " . escape( a:filespec, ' ' )
+    elseif l:dropActionNr == 7
+	let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
+    else
+	assert 0
+	return
     endif
 
     execute l:dropActionCommand 
@@ -70,13 +94,18 @@ function! s:IsBufTheOnlyWin( bufnr )
 endfunction
 
 function! s:QueryActionNr( filespec )
-    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview", 1, "Question" )
-    return l:dropActionNr
+    if has("gui") && g:dropqueryNoDialog
+	" Note: The dialog in the GUI version can be avoided by :set guioptions+=c
+	let l:savedGuioptions = &guioptions
+	set guioptions+=c
+    endif
 
-    " Note: The dialog in the GUI version can be avoided by :set guioptions-=c
-    "
-    "echohl Question
-    "let l:dropActionResponse = input( "[e]dit, (s)plit, (v)split, (p)review " . a:filespec . "? " )
-    "echohl None
+    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only", 1, "Question" )
+
+    if has("gui") && g:dropqueryNoDialog
+	let &guioptions = l:savedGuioptions
+    endif
+
+    return l:dropActionNr
 endfunction
 
