@@ -10,6 +10,9 @@ if exists("loaded_dropquery")
 endif
 let loaded_dropquery = 1
 
+let s:save_cpo = &cpo
+set cpo&vim
+
 "-- global configuration ------------------------------------------------------
 if !exists("g:dropqueryRemapDrop")
     " If set, remaps the built-in ':drop' command to use ':Drop' instead. 
@@ -108,4 +111,6 @@ function! s:QueryActionNr( filespec )
 
     return l:dropActionNr
 endfunction
+
+let &cpo = s:save_cpo
 
