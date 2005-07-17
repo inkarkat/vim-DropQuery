@@ -1,7 +1,13 @@
 " dropquery.vim: asks the user how a :drop'ed file be opened
 "
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
+"
+" TODO:
+" - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
+"
 " REVISION	DATE		REMARKS 
+"	0.02	01-Jun-2005	ENH: if dropped file is already visible; simply
+"				activate the corresponding window. 
 "	0.01	23-May-2005	file creation
 
 " Avoid installing twice or when in compatible mode
@@ -42,15 +48,10 @@ endif
 
 "-- functions -----------------------------------------------------------------
 function! s:Drop( filespec )
-    let l:currentBufNr = bufnr("%")
-    let l:isEmptyEditor = ( 
-		\ bufname(l:currentBufNr) == "" && 
-		\ s:IsBufTheOnlyWin(l:currentBufNr) && 
-		\ getbufvar(l:currentBufNr, "&modified") == 0 && 
-		\ getbufvar(l:currentBufNr, "&buftype") == "" 
-		\)
-    if l:isEmptyEditor
+    if s:IsEmptyEditor()
 	let l:dropActionNr = 1
+    elseif s:IsVisibleWindow( a:filespec )
+	let l:dropActionNr = 100
     else
 	let l:dropActionNr = s:QueryActionNr( a:filespec )
     endif
@@ -74,6 +75,11 @@ function! s:Drop( filespec )
 	let l:dropActionCommand = ":argadd" . " " . escape( a:filespec, ' ' )
     elseif l:dropActionNr == 7
 	let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
+    elseif l:dropActionNr == 100
+	" Use the :drop command to activate the window which contains the
+	" dropped file. 
+	let l:dropActionCommand = ":drop" . " " . a:filespec
+	"let l:dropActionCommand = ":" . bufwinnr(a:filespec) . "wincmd w"
     else
 	assert 0
 	return
@@ -96,6 +102,17 @@ function! s:IsBufTheOnlyWin( bufnr )
     return 1
 endfunction
 
+function! s:IsEmptyEditor()
+    let l:currentBufNr = bufnr("%")
+    let l:isEmptyEditor = ( 
+		\ bufname(l:currentBufNr) == "" && 
+		\ s:IsBufTheOnlyWin(l:currentBufNr) && 
+		\ getbufvar(l:currentBufNr, "&modified") == 0 && 
+		\ getbufvar(l:currentBufNr, "&buftype") == "" 
+		\)
+    return l:isEmptyEditor
+endfunction
+
 function! s:QueryActionNr( filespec )
     if has("gui") && g:dropqueryNoDialog
 	" Note: The dialog in the GUI version can be avoided by :set guioptions+=c
@@ -110,6 +127,11 @@ function! s:QueryActionNr( filespec )
     endif
 
     return l:dropActionNr
+endfunction
+
+function! s:IsVisibleWindow( filespec )
+    let l:winNr = bufwinnr( a:filespec )
+    return l:winNr != -1
 endfunction
 
 let &cpo = s:save_cpo
