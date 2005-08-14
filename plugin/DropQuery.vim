@@ -6,6 +6,9 @@
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 "
 " REVISION	DATE		REMARKS 
+"       0.03    18-Jul-2005     Added preference ':belowright' for both splits. 
+"                               In general, I'd like to keep the default
+"                               ':set nosplitbelow', though. 
 "	0.02	01-Jun-2005	ENH: if dropped file is already visible; simply
 "				activate the corresponding window. 
 "	0.01	23-May-2005	file creation
@@ -64,9 +67,9 @@ function! s:Drop( filespec )
     elseif l:dropActionNr == 1
 	let l:dropActionCommand = ":edit" . " " . a:filespec
     elseif l:dropActionNr == 2
-	let l:dropActionCommand = ":split" . " " . a:filespec
+	let l:dropActionCommand = ":belowright split" . " " . a:filespec
     elseif l:dropActionNr == 3
-	let l:dropActionCommand = ":vsplit" . " " . a:filespec
+	let l:dropActionCommand = ":belowright vsplit" . " " . a:filespec
     elseif l:dropActionNr == 4
 	let l:dropActionCommand = ":pedit" . " " . a:filespec
     elseif l:dropActionNr == 5
