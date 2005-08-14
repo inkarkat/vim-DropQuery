@@ -6,6 +6,11 @@
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 "
 " REVISION	DATE		REMARKS 
+"	0.04	15-Aug-2005	Added action 'new GVIM' to launch the file in a
+"				new GVIM instance. Requires that 'gvim' is
+"				accessible through $PATH. (Action 'new VIM'
+"				doesn't make much sense, because a new terminal
+"				window would be required, too.)
 "       0.03    18-Jul-2005     Added preference ':belowright' for both splits. 
 "                               In general, I'd like to keep the default
 "                               ':set nosplitbelow', though. 
@@ -78,6 +83,12 @@ function! s:Drop( filespec )
 	let l:dropActionCommand = ":argadd" . " " . escape( a:filespec, ' ' )
     elseif l:dropActionNr == 7
 	let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
+    elseif l:dropActionNr == 8
+	if has("win32")
+	    let l:dropActionCommand = "silent !start gvim \"" . a:filespec . "\""
+	else
+	    let l:dropActionCommand = "silent ! gvim \"" . a:filespec . "\""
+	endif
     elseif l:dropActionNr == 100
 	" Use the :drop command to activate the window which contains the
 	" dropped file. 
@@ -123,7 +134,7 @@ function! s:QueryActionNr( filespec )
 	set guioptions+=c
     endif
 
-    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only", 1, "Question" )
+    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\n&new GVIM", 1, "Question" )
 
     if has("gui") && g:dropqueryNoDialog
 	let &guioptions = l:savedGuioptions
