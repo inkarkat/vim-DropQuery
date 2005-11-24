@@ -11,6 +11,8 @@
 "				accessible through $PATH. (Action 'new VIM'
 "				doesn't make much sense, because a new terminal
 "				window would be required, too.)
+"				BF: HP-UX GVIM 6.3 confirm() returns -1 instead
+"				of 0 when dialog is aborted. 
 "       0.03    18-Jul-2005     Added preference ':belowright' for both splits. 
 "                               In general, I'd like to keep the default
 "                               ':set nosplitbelow', though. 
@@ -135,6 +137,11 @@ function! s:QueryActionNr( filespec )
     endif
 
     let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\n&new GVIM", 1, "Question" )
+
+    " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
+    if l:dropActionNr < 0
+	let l:dropActionNr = 0
+    endif
 
     if has("gui") && g:dropqueryNoDialog
 	let &guioptions = l:savedGuioptions
