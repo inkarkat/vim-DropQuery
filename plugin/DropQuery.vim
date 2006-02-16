@@ -97,8 +97,7 @@ function! s:Drop( filespec )
 	let l:dropActionCommand = ":drop" . " " . a:filespec
 	"let l:dropActionCommand = ":" . bufwinnr(a:filespec) . "wincmd w"
     else
-	assert 0
-	return
+	throw "Invalid dropActionNr!"
     endif
 
     execute l:dropActionCommand 
