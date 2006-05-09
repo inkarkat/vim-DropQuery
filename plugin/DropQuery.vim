@@ -6,6 +6,8 @@
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 "
 " REVISION	DATE		REMARKS 
+"	0.05	17-Feb-2006	BF: Avoid :drop command as it adds the dropped
+"				file to the argument list. 
 "	0.04	15-Aug-2005	Added action 'new GVIM' to launch the file in a
 "				new GVIM instance. Requires that 'gvim' is
 "				accessible through $PATH. (Action 'new VIM'
@@ -84,7 +86,9 @@ function! s:Drop( filespec )
     elseif l:dropActionNr == 6
 	let l:dropActionCommand = ":argadd" . " " . escape( a:filespec, ' ' )
     elseif l:dropActionNr == 7
-	let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
+	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
+	"let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
+	let l:dropActionCommand = ":split" . " " . escape( a:filespec, ' ' ) . "|only"
     elseif l:dropActionNr == 8
 	if has("win32")
 	    let l:dropActionCommand = "silent !start gvim \"" . a:filespec . "\""
@@ -92,10 +96,11 @@ function! s:Drop( filespec )
 	    let l:dropActionCommand = "silent ! gvim \"" . a:filespec . "\""
 	endif
     elseif l:dropActionNr == 100
-	" Use the :drop command to activate the window which contains the
+	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
+	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
-	let l:dropActionCommand = ":drop" . " " . a:filespec
-	"let l:dropActionCommand = ":" . bufwinnr(a:filespec) . "wincmd w"
+	"let l:dropActionCommand = ":drop" . " " . a:filespec
+	let l:dropActionCommand = ":" . bufwinnr(a:filespec) . "wincmd w"
     else
 	throw "Invalid dropActionNr!"
     endif
