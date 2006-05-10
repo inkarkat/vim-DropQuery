@@ -6,6 +6,9 @@
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 "
 " REVISION	DATE		REMARKS 
+"	0.06	10-May-2006	ENH: Added BideSomeTimeToLetActivationComplete()
+"				to avoid that VIM gets the focus after
+"				activation, but not VIM's popup dialog. 
 "	0.05	17-Feb-2006	BF: Avoid :drop command as it adds the dropped
 "				file to the argument list. 
 "	0.04	15-Aug-2005	Added action 'new GVIM' to launch the file in a
@@ -24,7 +27,7 @@
 
 " Avoid installing twice or when in compatible mode
 if exists("loaded_dropquery")
-    finish
+"TODO    finish
 endif
 let loaded_dropquery = 1
 
@@ -140,6 +143,14 @@ function! s:QueryActionNr( filespec )
 	set guioptions+=c
     endif
 
+    if ! g:dropqueryNoDialog
+	" Focus on the popup dialog requires that activation of VIM from the
+	" external call has been completed, so better wait a few milliseconds to
+	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
+	" on Windows XP. 
+	call s:BideSomeTimeToLetActivationComplete()
+    endif
+
     let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\n&new GVIM", 1, "Question" )
 
     " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
@@ -157,6 +168,29 @@ endfunction
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr( a:filespec )
     return l:winNr != -1
+endfunction
+
+function! s:BideSomeTimeToLetActivationComplete()
+    if has("reltime")
+	let l:starttime = reltime()
+	while 1
+	    let l:currenttime = reltimestr( reltime( l:starttime ) )
+	    " Cannot compare numerically, need to do string comparison via
+	    " pattern match.
+	    " Desired delay is 0.2 sec. 
+	    if l:currenttime =~ '^\s*\d\+\.[23456789]'
+		break
+	    endif
+	    " Since there is no built-in 'sleep' command, we're burning CPU
+	    " cycles in this tight loop. 
+	endwhile
+    else
+	if has("win32")
+	    call system( 'dir C:\ > NUL 2>&1' )
+	else
+	    call system( 'ls /tmp > /dev/null 2>&1' )
+	endif
+    endif
 endfunction
 
 let &cpo = s:save_cpo
