@@ -27,7 +27,7 @@
 
 " Avoid installing twice or when in compatible mode
 if exists("loaded_dropquery")
-"TODO    finish
+    finish
 endif
 let loaded_dropquery = 1
 
@@ -186,9 +186,9 @@ function! s:BideSomeTimeToLetActivationComplete()
 	endwhile
     else
 	if has("win32")
-	    call system( 'dir C:\ > NUL 2>&1' )
+	    call system( 'hostname > NUL 2>&1' )
 	else
-	    call system( 'ls /tmp > /dev/null 2>&1' )
+	    call system( 'hostname > /dev/null 2>&1' )
 	endif
     endif
 endfunction
