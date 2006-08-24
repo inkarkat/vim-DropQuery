@@ -4,8 +4,13 @@
 "
 " TODO:
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
+" - If a file is already open in another tab, this is not recognized, and the
+"   desired action will be queried from the user. All tabs should be searched
+"   for the file, and the first found tab and corresponding window inside should
+"   be activated. 
 "
 " REVISION	DATE		REMARKS 
+"	0.07	11-May-2006	VIM70: Added action 'new tab'. 
 "	0.06	10-May-2006	ENH: Added BideSomeTimeToLetActivationComplete()
 "				to avoid that VIM gets the focus after
 "				activation, but not VIM's popup dialog. 
@@ -93,6 +98,8 @@ function! s:Drop( filespec )
 	"let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
 	let l:dropActionCommand = ":split" . " " . escape( a:filespec, ' ' ) . "|only"
     elseif l:dropActionNr == 8
+	let l:dropActionCommand = ":tabedit" . " ". a:filespec
+    elseif l:dropActionNr == 9
 	if has("win32")
 	    let l:dropActionCommand = "silent !start gvim \"" . a:filespec . "\""
 	else
@@ -151,7 +158,7 @@ function! s:QueryActionNr( filespec )
 	call s:BideSomeTimeToLetActivationComplete()
     endif
 
-    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\n&new GVIM", 1, "Question" )
+    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, "Question" )
 
     " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
     if l:dropActionNr < 0
