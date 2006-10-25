@@ -10,6 +10,9 @@
 "   be activated. 
 "
 " REVISION	DATE		REMARKS 
+"	0.08	25-Aug-2006	I18N: Endless loop in
+"				BideSomeTimeToLetActivationComplete() on German 
+"				locale; added ',' as a decimal separator. 
 "	0.07	11-May-2006	VIM70: Added action 'new tab'. 
 "	0.06	10-May-2006	ENH: Added BideSomeTimeToLetActivationComplete()
 "				to avoid that VIM gets the focus after
@@ -185,7 +188,7 @@ function! s:BideSomeTimeToLetActivationComplete()
 	    " Cannot compare numerically, need to do string comparison via
 	    " pattern match.
 	    " Desired delay is 0.2 sec. 
-	    if l:currenttime =~ '^\s*\d\+\.[23456789]'
+	    if l:currenttime =~ '^\s*\d\+[.,][23456789]'
 		break
 	    endif
 	    " Since there is no built-in 'sleep' command, we're burning CPU
