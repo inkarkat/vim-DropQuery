@@ -10,6 +10,9 @@
 "   be activated. 
 "
 " REVISION	DATE		REMARKS 
+"	0.09	26-Oct-2006	ENH: Learned from a VimTip that VIM does have a
+"				built-in sleep comand; replaced clumsy function 
+"				BideSomeTimeToLetActivationComplete(). 
 "	0.08	25-Aug-2006	I18N: Endless loop in
 "				BideSomeTimeToLetActivationComplete() on German 
 "				locale; added ',' as a decimal separator. 
@@ -158,7 +161,7 @@ function! s:QueryActionNr( filespec )
 	" external call has been completed, so better wait a few milliseconds to
 	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
 	" on Windows XP. 
-	call s:BideSomeTimeToLetActivationComplete()
+	sleep 200m
     endif
 
     let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, "Question" )
@@ -178,29 +181,6 @@ endfunction
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr( a:filespec )
     return l:winNr != -1
-endfunction
-
-function! s:BideSomeTimeToLetActivationComplete()
-    if has("reltime")
-	let l:starttime = reltime()
-	while 1
-	    let l:currenttime = reltimestr( reltime( l:starttime ) )
-	    " Cannot compare numerically, need to do string comparison via
-	    " pattern match.
-	    " Desired delay is 0.2 sec. 
-	    if l:currenttime =~ '^\s*\d\+[.,][23456789]'
-		break
-	    endif
-	    " Since there is no built-in 'sleep' command, we're burning CPU
-	    " cycles in this tight loop. 
-	endwhile
-    else
-	if has("win32")
-	    call system( 'hostname > NUL 2>&1' )
-	else
-	    call system( 'hostname > /dev/null 2>&1' )
-	endif
-    endif
 endfunction
 
 let &cpo = s:save_cpo
