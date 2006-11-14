@@ -2,6 +2,9 @@
 "
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
+" DEPENDENCIES:
+"   - Requires VIM 7.0. 
+"
 " TODO:
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 " - If a file is already open in another tab, this is not recognized, and the
@@ -10,6 +13,10 @@
 "   be activated. 
 "
 " REVISION	DATE		REMARKS 
+"	0.10	02-Nov-2006	Documented function arguments and the
+"				-complete=file option. 
+"				Better escaping of passed filespec. 
+"				Now requiring VIM 7.0. 
 "	0.09	26-Oct-2006	ENH: Learned from a VimTip that VIM does have a
 "				built-in sleep comand; replaced clumsy function 
 "				BideSomeTimeToLetActivationComplete(). 
@@ -37,7 +44,7 @@
 "	0.01	23-May-2005	file creation
 
 " Avoid installing twice or when in compatible mode
-if exists("loaded_dropquery")
+if exists("loaded_dropquery") || (v:version < 700)
     finish
 endif
 let loaded_dropquery = 1
@@ -59,21 +66,24 @@ if !exists("g:dropqueryNoDialog")
     let g:dropqueryNoDialog = 0
 endif
 
-"-- commands ------------------------------------------------------------------
-" Note to -nargs=1: 
-" :drop supports passing of multiple files, which are then added to the
-" argument-list. This functionality cannot be supported, because the filespecs
-" to :drop are not enclosed by double quotes, but have escaped spaces instead. 
-" Fortunately, this functionality is seldomly used. 
-:command! -nargs=1 -complete=file Drop call <SID>Drop(<f-args>)
-
-if g:dropqueryRemapDrop
-    cabbrev drop Drop
-endif
-
-
 "-- functions -----------------------------------------------------------------
 function! s:Drop( filespec )
+"*******************************************************************************
+"* PURPOSE:
+"   Prompts the user for the action to be taken with the dropped file. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   a:filespec filespec of the dropped file. The syntax will be operating-system
+"	specific due to the 'command -complete=file' option. 
+"* RETURN VALUES: 
+"   none
+"*******************************************************************************
+    let l:fileSpecInVimSyntax = escape( tr( a:filespec, '\', '/' ), ' \')
+"****D echo '**** Dropped filespec is "' . a:filespec . '", in VIM syntax "' . l:fileSpecInVimSyntax . '". '
+
     if s:IsEmptyEditor()
 	let l:dropActionNr = 1
     elseif s:IsVisibleWindow( a:filespec )
@@ -88,23 +98,23 @@ function! s:Drop( filespec )
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	let l:dropActionCommand = ":edit" . " " . a:filespec
+	let l:dropActionCommand = ":edit" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 2
-	let l:dropActionCommand = ":belowright split" . " " . a:filespec
+	let l:dropActionCommand = ":belowright split" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 3
-	let l:dropActionCommand = ":belowright vsplit" . " " . a:filespec
+	let l:dropActionCommand = ":belowright vsplit" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 4
-	let l:dropActionCommand = ":pedit" . " " . a:filespec
+	let l:dropActionCommand = ":pedit" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 5
-	let l:dropActionCommand = ":argedit" . " " . escape( a:filespec, ' ' )
+	let l:dropActionCommand = ":argedit" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 6
-	let l:dropActionCommand = ":argadd" . " " . escape( a:filespec, ' ' )
+	let l:dropActionCommand = ":argadd" . " " . l:fileSpecInVimSyntax
     elseif l:dropActionNr == 7
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	"let l:dropActionCommand = ":drop" . " " . escape( a:filespec, ' ' ) . "|only"
-	let l:dropActionCommand = ":split" . " " . escape( a:filespec, ' ' ) . "|only"
+	"let l:dropActionCommand = ":drop" . " " . l:fileSpecInVimSyntax . "|only"
+	let l:dropActionCommand = ":split" . " " . l:fileSpecInVimSyntax . "|only"
     elseif l:dropActionNr == 8
-	let l:dropActionCommand = ":tabedit" . " ". a:filespec
+	let l:dropActionCommand = ":tabedit" . " ". l:fileSpecInVimSyntax
     elseif l:dropActionNr == 9
 	if has("win32")
 	    let l:dropActionCommand = "silent !start gvim \"" . a:filespec . "\""
@@ -115,7 +125,7 @@ function! s:Drop( filespec )
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
-	"let l:dropActionCommand = ":drop" . " " . a:filespec
+	"let l:dropActionCommand = ":drop" . " " . l:fileSpecInVimSyntax
 	let l:dropActionCommand = ":" . bufwinnr(a:filespec) . "wincmd w"
     else
 	throw "Invalid dropActionNr!"
@@ -182,6 +192,32 @@ function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr( a:filespec )
     return l:winNr != -1
 endfunction
+
+"-- commands ------------------------------------------------------------------
+" The filespec passed to :drop should conform to VIM syntax, just as the
+" built-in :drop command would expect them:
+" - spaces are escaped with '\'
+" - path delimiters are forward slashes; backslashed are only used for
+"   escaping. 
+" - no enclosing of filespecs in double quotes
+"
+" Note to -complete=file:
+" With this option, VIM (7.0) automatically converts the passed filespec to the
+" typical syntax of the current operating-system (i.e. backslashes on Windows,
+" no escaping of spaces on neither Unix nor Windows), and expands shell
+" wildcards such as '?' and '*'. Without this option, the filespec would be
+" passed as-is. 
+"
+" Note to -nargs=1: 
+" :drop supports passing of multiple files, which are then added to the
+" argument-list. This functionality cannot be supported, because the filespecs
+" to :drop are not enclosed by double quotes, but have escaped spaces instead. 
+" Fortunately, this functionality is seldomly used. 
+:command! -nargs=1 -complete=file Drop call <SID>Drop(<f-args>)
+
+if g:dropqueryRemapDrop
+    cabbrev drop Drop
+endif
 
 let &cpo = s:save_cpo
 
