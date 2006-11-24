@@ -302,6 +302,10 @@ endfunction
 " argument-list. The filespecs to :drop are not enclosed by double quotes, but
 " have escaped spaces instead. Fortunately, the '-complete=file' helps us on
 " that one. 
+"
+" Note to <f-args>:
+" A maximum of 20 arguments can be passed to a Vim function. The built-in :drop
+" command has no such limitation. 
 :command! -nargs=+ -complete=file Drop call <SID>Drop(<f-args>)
 
 if g:dropqueryRemapDrop
