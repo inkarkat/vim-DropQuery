@@ -12,6 +12,7 @@
 "   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
+"	0.21	16-Nov-2006	BF: '%' and '#' must also be escaped for VIM. 
 "	0.20	15-Nov-2006	Added support for multiple files passed to
 "				:Drop, making it fully compatible with the
 "				built-in :drop command. 
@@ -155,7 +156,7 @@ endfunction
 function! s:ExecuteForEachFile( excommand, isFileSpecInVimSyntax, filespecs )
     for l:filespec in a:filespecs
 	if a:isFileSpecInVimSyntax
-	    let l:filespec = escape( tr( l:filespec, '\', '/' ), ' \')
+	    let l:filespec = escape( tr( l:filespec, '\', '/' ), ' \%#')
 	else
 	    let l:filespec = '"' . l:filespec . '"'
 	endif
@@ -178,7 +179,7 @@ function! s:ConvertToStringInVimSyntax( filespecs )
 "*******************************************************************************
     let l:filespecString = ''
     for l:filespec in a:filespecs
-	let l:filespecString .= ' ' . escape( tr( l:filespec, '\', '/' ), ' \')
+	let l:filespecString .= ' ' . escape( tr( l:filespec, '\', '/' ), ' \%#')
     endfor
     return l:filespecString
 endfunction
@@ -197,7 +198,7 @@ function! s:DropSingleFile( filespec )
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
-    let l:filespecInVimSyntax = escape( tr( a:filespec, '\', '/' ), ' \')
+    let l:filespecInVimSyntax = escape( tr( a:filespec, '\', '/' ), ' \%#')
 "****D echo '**** Dropped filespec is "' . a:filespec . '", in VIM syntax "' . l:filespecInVimSyntax . '". '
 
     if s:IsEmptyEditor()
