@@ -5,6 +5,9 @@
 " DEPENDENCIES:
 "   - Requires VIM 7.0. 
 "
+" LIMITATIONS:
+" - :Drop is limited to a maximum of 20 passed files. 
+"
 " TODO:
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 " - If a file is already open in another tab, this is not recognized, and the
