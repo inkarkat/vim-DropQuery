@@ -6,7 +6,6 @@
 "   - Requires VIM 7.0. 
 "
 " LIMITATIONS:
-" - :Drop is limited to a maximum of 20 passed files. 
 "
 " TODO:
 " - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
@@ -15,6 +14,15 @@
 "   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
+"	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
+"				Switched main filespec format from normal to ex
+"				syntax; VIM commands and user display use
+"				s:ConvertFilespecInExSyntaxToNormalFilespec() to
+"				unescape the ex syntax; that was formerly done
+"				by -complete=file. 
+"				Multiple files are passed as one string
+"				(-nargs=1, and splitting is done inside the
+"				s:Drop() function. 
 "	0.21	16-Nov-2006	BF: '%' and '#' must also be escaped for VIM. 
 "	0.20	15-Nov-2006	Added support for multiple files passed to
 "				:Drop, making it fully compatible with the
@@ -135,7 +143,7 @@ endfunction
 function! s:QueryActionNrForSingleFile( filespec )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
-    let l:dropActionNr = confirm( "Action for file " . s:ConvertFilespecInVimSyntaxToNormalFilespec(a:filespec) . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, "Question" )
+    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, "Question" )
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
     return l:dropActionNr
@@ -167,9 +175,9 @@ function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
 "   a:isQuoteFilespec	Flag whether the filespec should be double-quoted. This
 "			is necessary if an external GVIM instance is started, as
 "			the shell gets invoked. The filespec must still be in
-"			VIM syntax, though, as [%#] are interpreted inside the
+"			ex syntax, though, as [%#] are interpreted inside the
 "			ex command. 
-"   a:filespecs		List of filespecs in VIM syntax. 
+"   a:filespecs		List of filespecs in ex syntax. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
@@ -181,13 +189,13 @@ function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
     endfor
 endfunction
 
-function! s:ConvertFilespecInVimSyntaxToNormalFilespec( filespecInVimSyntax )
+function! s:ConvertFilespecInExSyntaxToNormalFilespec( filespecInExSyntax )
 "*******************************************************************************
 "* PURPOSE:
-"   Converts the passed a:filespecInVimSyntax to the normal filespec syntax
+"   Converts the passed a:filespecInExSyntax to the normal filespec syntax
 "   (i.e. no escaping of [%#], possibly backslashes as path separator). The
 "   normal syntax is required by VIM functions such as bufwinnr(), because they
-"   do not understand the escaping for ex commands. 
+"   do not understand the escaping of [%#] for ex commands. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -197,11 +205,11 @@ function! s:ConvertFilespecInVimSyntaxToNormalFilespec( filespecInVimSyntax )
 "* RETURN VALUES: 
 "	? Explanation of the value returned.
 "*******************************************************************************
-    "return fnamemodify( substitute( a:filespecInVimSyntax, '\\\([\\%#]\)', '\1', 'g'), ':p' )
-    return fnamemodify( a:filespecInVimSyntax, ':gs+\\\([\\%#]\)+\1+:p' )
+    "return fnamemodify( substitute( a:filespecInExSyntax, '\\\([ \\%#]\)', '\1', 'g'), ':p' )
+    return fnamemodify( a:filespecInExSyntax, ':gs+\\\([ \\%#]\)+\1+:p' )
 endfunction
 
-function! s:DropSingleFile( filespec )
+function! s:DropSingleFile( filespecInExSyntax )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file. 
@@ -210,66 +218,65 @@ function! s:DropSingleFile( filespec )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:filespec filespec of the dropped file. The syntax will be operating-system
-"	specific due to the 'command -complete=file' option. 
+"   a:filespecInExSyntax filespec of the dropped file. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
-"****D echo '**** Dropped filespec is "' . a:filespec . '". '
+"****D echo '**** Dropped filespec is "' . a:filespecInExSyntax . '". '
 
     if s:IsEmptyEditor()
 	let l:dropActionNr = 1
-    elseif s:IsVisibleWindow( s:ConvertFilespecInVimSyntaxToNormalFilespec(a:filespec) )
+    elseif s:IsVisibleWindow( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
 	let l:dropActionNr = 100
     else
-	let l:dropActionNr = s:QueryActionNrForSingleFile( s:ConvertFilespecInVimSyntaxToNormalFilespec(a:filespec) )
+	let l:dropActionNr = s:QueryActionNrForSingleFile( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
     endif
 
     " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
     if l:dropActionNr <= 0
 	echohl WarningMsg
-	echo 'Canceled opening of file ' . s:ConvertFilespecInVimSyntaxToNormalFilespec(a:filespec)
+	echo 'Canceled opening of file ' . s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	execute ':edit' . ' ' . a:filespec
+	execute ':edit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 2
-	execute ':belowright split' . ' ' . a:filespec
+	execute ':belowright split' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 3
-	execute ':belowright vsplit' . ' ' . a:filespec
+	execute ':belowright vsplit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 4
-	execute ':pedit' . ' ' . a:filespec
+	execute ':pedit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 5
-	execute ':argedit' . ' ' . a:filespec
+	execute ':argedit' . ' ' . a:filespecInExSyntax
 	args
     elseif l:dropActionNr == 6
-	execute ':999argadd' . ' ' . a:filespec
+	execute ':999argadd' . ' ' . a:filespecInExSyntax
 	args
     elseif l:dropActionNr == 7
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	"execute ':drop' . ' ' . a:filespec . '|only'
-	execute ':split' . ' ' . a:filespec . '|only'
+	"execute ':drop' . ' ' . a:filespecInExSyntax . '|only'
+	execute ':split' . ' ' . a:filespecInExSyntax . '|only'
     elseif l:dropActionNr == 8
-	execute ':tabedit' . ' '. a:filespec
+	execute ':tabedit' . ' '. a:filespecInExSyntax
     elseif l:dropActionNr == 9
-	execute s:exCommandForExternalGvim . ' "' . a:filespec . '"'
+	execute s:exCommandForExternalGvim . ' "' . a:filespecInExSyntax . '"'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
-	"execute ":drop" . " " . a:filespec
-	execute ':' . bufwinnr(s:ConvertFilespecInVimSyntaxToNormalFilespec(a:filespec)) . 'wincmd w'
+	"execute ":drop" . " " . a:filespecInExSyntax
+	execute ':' . bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
     else
 	throw 'Invalid dropActionNr!'
     endif
 endfunction
 
-function! s:Drop( filespecString )
-    let l:filespecs = split( a:filespecString, '\\\@<! ')
+function! s:Drop( filespecInExSyntaxString )
+    let l:filespecs = split( a:filespecInExSyntaxString, '\\\@<! ')
     if empty( l:filespecs )
 	throw 'Must pass at least one filespec!'
     elseif len( l:filespecs ) == 1
-	call s:DropSingleFile( a:filespecString )
+	call s:DropSingleFile( a:filespecInExSyntaxString )
 	return
     endif
 
@@ -281,10 +288,10 @@ function! s:Drop( filespecString )
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	execute '999argadd' . ' ' . a:filespecString
+	execute '999argadd' . ' ' . a:filespecInExSyntaxString
 	args
     elseif l:dropActionNr == 2
-	execute 'args' . ' ' . a:filespecString
+	execute 'args' . ' ' . a:filespecInExSyntaxString
 	args
     elseif l:dropActionNr == 3
 	call s:ExecuteForEachFile( 'belowright split', 0, l:filespecs )
@@ -300,7 +307,7 @@ function! s:Drop( filespecString )
 endfunction
 
 "-- commands ------------------------------------------------------------------
-" The filespec passed to :drop should conform to VIM syntax, just as the
+" The filespec passed to :drop should conform to ex syntax, just as the
 " built-in :drop command would expect them:
 " - spaces, [%#] are escaped with '\'
 " - path delimiters are forward slashes; backslashes are only used for
