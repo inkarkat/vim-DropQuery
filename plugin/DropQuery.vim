@@ -19,7 +19,11 @@
 "				syntax (i.e. spaces escaped by backslashes),
 "				enclosed in double quotes. Thus, spaces were
 "				quoted/escaped twice. On Windows, however,
-"				filespecs must be double-quoted. 
+"				filespecs must be double-quoted. Introduced
+"				s:EscapeNormalFilespecForExCommand(); the
+"				filespec for the external GVIM command is now
+"				double-quoted and processed through
+"				s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec( filespec ) ). 
 "	0.23	14-Dec-2006	Added foreground() call to :sleep to hopefully 
 "				achieve dialog focus on activation. 
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
@@ -93,7 +97,7 @@ if !exists("g:dropqueryNoDialog")
     let g:dropqueryNoDialog = 0
 endif
 
-if has("win32")
+if has('win32')
     let s:exCommandForExternalGvim = 'silent !start gvim'
 else
     let s:exCommandForExternalGvim = 'silent ! gvim'
@@ -192,7 +196,7 @@ function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
 "*******************************************************************************
     for l:filespec in a:filespecs
 	if a:isQuoteFilespec
-	    let l:filespec = '"' . l:filespec . '"'
+	    let l:filespec = '"' . s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(l:filespec) ) . '"'
 	endif
 	execute a:excommand . ' ' . l:filespec
     endfor
@@ -205,6 +209,9 @@ function! s:ConvertFilespecInExSyntaxToNormalFilespec( filespecInExSyntax )
 "   (i.e. no escaping of [%#], possibly backslashes as path separator). The
 "   normal syntax is required by VIM functions such as bufwinnr(), because they
 "   do not understand the escaping of [%#] for ex commands. 
+"   Note: On Windows, fnamemodify() doesn't convert path separators to
+"   backslashes. We don't do that neither, as forward slashes work just as well
+"   and there is less potential for problems. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -216,6 +223,23 @@ function! s:ConvertFilespecInExSyntaxToNormalFilespec( filespecInExSyntax )
 "*******************************************************************************
     "return fnamemodify( substitute( a:filespecInExSyntax, '\\\([ \\%#]\)', '\1', 'g'), ':p' )
     return fnamemodify( a:filespecInExSyntax, ':gs+\\\([ \\%#]\)+\1+:p' )
+endfunction
+
+function! s:EscapeNormalFilespecForExCommand( filespec )
+"*******************************************************************************
+"* PURPOSE:
+"   Escaped a normal filespec syntax so that it can be used in the ':! command
+"   "filespec"' ex command. For that, [%#] must be escaped. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"	? Explanation of each argument that isn't obvious.
+"* RETURN VALUES: 
+"	? Explanation of the value returned.
+"*******************************************************************************
+    return substitute( a:filespec, '[\\%#]', '\\\0', 'g' )
 endfunction
 
 function! s:DropSingleFile( filespecInExSyntax )
@@ -268,13 +292,7 @@ function! s:DropSingleFile( filespecInExSyntax )
     elseif l:dropActionNr == 8
 	execute ':tabedit' . ' '. a:filespecInExSyntax
     elseif l:dropActionNr == 9
-	" The filespec must be in ex syntax, as [%#] are interpreted inside the
-	" ':!' ex command. 
-	if has('win32')
-	    execute s:exCommandForExternalGvim . ' "'. a:filespecInExSyntax . '"'
-	else
-	    execute s:exCommandForExternalGvim . ' '. a:filespecInExSyntax
-	endif
+	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) ) . '"'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
@@ -315,18 +333,7 @@ function! s:Drop( filespecInExSyntaxString )
     elseif l:dropActionNr == 5
 	call s:ExecuteForEachFile( 'tabedit', 0, l:filespecs )
     elseif l:dropActionNr == 6
-	" The filespec must be in ex syntax, as [%#] are interpreted inside the
-	" ':!' ex command. 
-	if has('win32')
-	    " Fortunately, Windows accepts filespecs with forward slashes.
-	    " The filespec must be double-quoted. 
-	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
-	else
-	    " On Unix, the ex command can be taken as-is. The escaped [%#] will
-	    " be unescaped by the :! command. Because spaces remain escaped with
-	    " '\', the filespec must not be enclosed in double-quotes. 
-	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, 0, l:filespecs )
-	endif
+	call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
     else
 	throw "Invalid dropActionNr!"
     endif
