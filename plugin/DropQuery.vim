@@ -14,6 +14,12 @@
 "   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
+"	024	04-Jun-2007	BF: Single file action "new GVIM" didn't work on
+"				Unix, because the filespec is passed in ex
+"				syntax (i.e. spaces escaped by backslashes),
+"				enclosed in double quotes. Thus, spaces were
+"				quoted/escaped twice. On Windows, however,
+"				filespecs must be double-quoted. 
 "	0.23	14-Dec-2006	Added foreground() call to :sleep to hopefully 
 "				achieve dialog focus on activation. 
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
@@ -179,11 +185,7 @@ function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:isQuoteFilespec	Flag whether the filespec should be double-quoted. This
-"			is necessary if an external GVIM instance is started, as
-"			the shell gets invoked. The filespec must still be in
-"			ex syntax, though, as [%#] are interpreted inside the
-"			ex command. 
+"   a:isQuoteFilespec	Flag whether the filespec should be double-quoted. 
 "   a:filespecs		List of filespecs in ex syntax. 
 "* RETURN VALUES: 
 "   none
@@ -266,7 +268,13 @@ function! s:DropSingleFile( filespecInExSyntax )
     elseif l:dropActionNr == 8
 	execute ':tabedit' . ' '. a:filespecInExSyntax
     elseif l:dropActionNr == 9
-	execute s:exCommandForExternalGvim . ' "' . a:filespecInExSyntax . '"'
+	" The filespec must be in ex syntax, as [%#] are interpreted inside the
+	" ':!' ex command. 
+	if has('win32')
+	    execute s:exCommandForExternalGvim . ' "'. a:filespecInExSyntax . '"'
+	else
+	    execute s:exCommandForExternalGvim . ' '. a:filespecInExSyntax
+	endif
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
@@ -307,7 +315,18 @@ function! s:Drop( filespecInExSyntaxString )
     elseif l:dropActionNr == 5
 	call s:ExecuteForEachFile( 'tabedit', 0, l:filespecs )
     elseif l:dropActionNr == 6
-	call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
+	" The filespec must be in ex syntax, as [%#] are interpreted inside the
+	" ':!' ex command. 
+	if has('win32')
+	    " Fortunately, Windows accepts filespecs with forward slashes.
+	    " The filespec must be double-quoted. 
+	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
+	else
+	    " On Unix, the ex command can be taken as-is. The escaped [%#] will
+	    " be unescaped by the :! command. Because spaces remain escaped with
+	    " '\', the filespec must not be enclosed in double-quotes. 
+	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, 0, l:filespecs )
+	endif
     else
 	throw "Invalid dropActionNr!"
     endif
