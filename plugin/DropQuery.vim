@@ -1,4 +1,4 @@
-" dropquery.vim: asks the user how a :drop'ed file be opened
+" dropquery.vim: Ask the user how a :drop'ed file be opened. 
 "
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
@@ -14,6 +14,8 @@
 "   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
+"	0.23	14-Dec-2006	Added foreground() call to :sleep to hopefully 
+"				achieve dialog focus on activation. 
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
 "				Switched main filespec format from normal to ex
 "				syntax; VIM commands and user display use
@@ -36,8 +38,8 @@
 "				-complete=file option. 
 "				Better escaping of passed filespec. 
 "				Now requiring VIM 7.0. 
-"	0.09	26-Oct-2006	ENH: Learned from a VimTip that VIM does have a
-"				built-in sleep comand; replaced clumsy function 
+"	0.09	26-Oct-2006	ENH: Learned from a vimtip that VIM does have a
+"				built-in :sleep comand; replaced clumsy function 
 "				BideSomeTimeToLetActivationComplete(). 
 "	0.08	25-Aug-2006	I18N: Endless loop in
 "				BideSomeTimeToLetActivationComplete() on German 
@@ -129,6 +131,11 @@ function! s:SaveGuiOptions()
 	" external call has been completed, so better wait a few milliseconds to
 	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
 	" on Windows XP. 
+	" The sleep workaround still doesn't work all the time on Windows XP.
+	" I've empirically found out that I get better luck if foreground() is
+	" called before the delay, or maybe I'm just fooled once more. 
+	" This whole stuff reminds me of witchcraft, not engineering :-)
+	call foreground()
 	sleep 200m
     endif
     return l:savedGuiOptions
