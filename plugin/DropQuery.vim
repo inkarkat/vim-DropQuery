@@ -24,6 +24,10 @@
 "				filespec for the external GVIM command is now
 "				double-quoted and processed through
 "				s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec( filespec ) ). 
+"				BF: In the :! ex command, the character '!' must
+"				also be escaped. (It stands for the previously
+"				executed :! command.) Now escaping [%#!] in
+"				s:EscapeNormalFilespecForExCommand(). 
 "	0.23	14-Dec-2006	Added foreground() call to :sleep to hopefully 
 "				achieve dialog focus on activation. 
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
@@ -229,7 +233,9 @@ function! s:EscapeNormalFilespecForExCommand( filespec )
 "*******************************************************************************
 "* PURPOSE:
 "   Escaped a normal filespec syntax so that it can be used in the ':! command
-"   "filespec"' ex command. For that, [%#] must be escaped. 
+"   "filespec"' ex command. For ex commands, [%#] must be escaped; for the ':!'
+"   ex command, the [!] character must be escaped, too, because it stands for
+"   the previously execute :! command. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -239,7 +245,7 @@ function! s:EscapeNormalFilespecForExCommand( filespec )
 "* RETURN VALUES: 
 "	? Explanation of the value returned.
 "*******************************************************************************
-    return substitute( a:filespec, '[\\%#]', '\\\0', 'g' )
+    return substitute( a:filespec, '[\\%#!]', '\\\0', 'g' )
 endfunction
 
 function! s:DropSingleFile( filespecInExSyntax )
