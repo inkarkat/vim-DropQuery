@@ -8,7 +8,6 @@
 " LIMITATIONS:
 "
 " TODO:
-" - Ask whether to discard changes when user selected option "Edit" on currently modified buffer. 
 " - If a file is already open in another tab, this is not recognized, and the
 "   desired action will be queried from the user. All tabs should be searched
 "   for the file, and there should be an option "Goto tab" should be presented. 
@@ -21,6 +20,9 @@
 "				Renamed configuration variables to
 "				g:dropquery_... for consistency with other
 "				plugins. 
+"				ENH: Asking whether to discard changes when the
+"				action would abandon a currently modified
+"				buffer (via :confirm). 
 "	024	04-Jun-2007	BF: Single file action "new GVIM" didn't work on
 "				Unix, because the filespec is passed in ex
 "				syntax (i.e. spaces escaped by backslashes),
@@ -102,10 +104,11 @@ if !exists("g:dropquery_RemapDrop")
     let g:dropquery_RemapDrop = 1
 endif
 
-if !exists("g:dropquery_NoDialog")
-    " If set, never uses a pop-up dialog in the GUI VIM. Instead, a textual
-    " query (as is done in the console VIM) is used. 
-    let g:dropquery_NoDialog = 0
+if !exists("g:dropquery_NoPopup")
+    " If set, doesn't use a pop-up dialog in GVIM for the query. Instead, a
+    " textual query (as is done in the console VIM) is used. This does not cover
+    " the :confirm query "Save changes to...?" when abandoning modified buffers. 
+    let g:dropquery_NoPopup = 0
 endif
 
 if has('win32')
@@ -141,13 +144,12 @@ endfunction
 
 function! s:SaveGuiOptions()
     let l:savedGuiOptions = ''
-    if has("gui") && g:dropquery_NoDialog
-	" Note: The dialog in the GUI version can be avoided by :set guioptions+=c
+    if has("gui") && g:dropquery_NoPopup
 	let l:savedGuiOptions = &guioptions
-	set guioptions+=c
+	set guioptions+=c   " Temporarily avoid popup dialog. 
     endif
 
-    if ! g:dropquery_NoDialog
+    if ! g:dropquery_NoPopup
 	" Focus on the popup dialog requires that activation of VIM from the
 	" external call has been completed, so better wait a few milliseconds to
 	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
@@ -163,7 +165,7 @@ function! s:SaveGuiOptions()
 endfunction
 
 function! s:RestoreGuiOptions( savedGuiOptions )
-    if has("gui") && g:dropquery_NoDialog
+    if has("gui") && g:dropquery_NoPopup
 	let &guioptions = a:savedGuiOptions
     endif
 endfunction
@@ -292,33 +294,33 @@ function! s:DropSingleFile( filespecInExSyntax )
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	execute ':edit' . ' ' . a:filespecInExSyntax
+	execute 'confirm edit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 2
-	execute ':belowright split' . ' ' . a:filespecInExSyntax
+	execute 'belowright split' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 3
-	execute ':belowright vsplit' . ' ' . a:filespecInExSyntax
+	execute 'belowright vsplit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 4
-	execute ':pedit' . ' ' . a:filespecInExSyntax
+	execute 'confirm pedit' . ' ' . a:filespecInExSyntax
     elseif l:dropActionNr == 5
-	execute ':argedit' . ' ' . a:filespecInExSyntax
+	execute 'confirm argedit' . ' ' . a:filespecInExSyntax
 	args
     elseif l:dropActionNr == 6
-	execute ':999argadd' . ' ' . a:filespecInExSyntax
+	execute '999argadd' . ' ' . a:filespecInExSyntax
 	args
     elseif l:dropActionNr == 7
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	"execute ':drop' . ' ' . a:filespecInExSyntax . '|only'
-	execute ':split' . ' ' . a:filespecInExSyntax . '|only'
+	"execute 'drop' . ' ' . a:filespecInExSyntax . '|only'
+	execute 'split' . ' ' . a:filespecInExSyntax . '|only'
     elseif l:dropActionNr == 8
-	execute ':tabedit' . ' '. a:filespecInExSyntax
+	execute 'tabedit' . ' '. a:filespecInExSyntax
     elseif l:dropActionNr == 9
 	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) ) . '"'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
-	"execute ":drop" . " " . a:filespecInExSyntax
-	execute ':' . bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
+	"execute "drop" . " " . a:filespecInExSyntax
+	execute bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
     else
 	throw 'Invalid dropActionNr!'
     endif
@@ -344,7 +346,7 @@ function! s:Drop( filespecInExSyntaxString )
 	execute '999argadd' . ' ' . a:filespecInExSyntaxString
 	args
     elseif l:dropActionNr == 2
-	execute 'args' . ' ' . a:filespecInExSyntaxString
+	execute 'confirm args' . ' ' . a:filespecInExSyntaxString
 	args
     elseif l:dropActionNr == 3
 	call s:ExecuteForEachFile( 'belowright split', 0, l:filespecs )
