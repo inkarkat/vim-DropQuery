@@ -23,6 +23,13 @@
 "				ENH: Asking whether to discard changes when the
 "				action would abandon a currently modified
 "				buffer (via :confirm). 
+"				ENH: If a (single) file is already open in
+"				another tab, an additional action "goto tab" is
+"				prepended to the list of possible actions. 
+"				Action "new tab" now adds the tab at the very
+"				end, not after the current tab. This is more
+"				intuitive, because you typically don't think
+"				about tab pages when dropping a file. 
 "	024	04-Jun-2007	BF: Single file action "new GVIM" didn't work on
 "				Unix, because the filespec is passed in ex
 "				syntax (i.e. spaces escaped by backslashes),
@@ -170,7 +177,7 @@ function! s:RestoreGuiOptions( savedGuiOptions )
     endif
 endfunction
 
-function! s:QueryActionNrForSingleFile( filespec )
+function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
     " The :edit command can be used to both edit an existing file and create a
@@ -180,9 +187,25 @@ function! s:QueryActionNrForSingleFile( filespec )
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = empty( glob( a:filespec ) ) ? '&create' : '&edit'
-    let l:dropActionNr = confirm( 'Action for file ' . a:filespec . ' ?', l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, 'Question' )
+    let l:actions = l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM"
+    if a:isOpenInAnotherTabPage
+	let l:actions = "&goto tab\n" . l:actions
+    endif
+
+    let l:dropActionNr = confirm( 'Action for file ' . a:filespec . ' ?', l:actions, 1, 'Question' )
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
+
+    " Resort action numbers, considering that "goto tab" (#10) went to #1 in the
+    " list. 
+    if a:isOpenInAnotherTabPage
+	if l:dropActionNr == 1
+	    let l:dropActionNr = 10
+	elseif l:dropActionNr > 1
+	    let l:dropActionNr -= 1
+	endif
+    endif
+
     return l:dropActionNr
 endfunction
 
@@ -198,6 +221,43 @@ endfunction
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr( a:filespec )
     return l:winNr != -1
+endfunction
+
+function! s:GetTabPageNr( filespec )
+"*******************************************************************************
+"* PURPOSE:
+"   If a:filespec has been loaded into a buffer that is visible on another tab
+"   page, return the tab page number. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   a:filespec
+"* RETURN VALUES: 
+"   tab page number of the first tab page (other than the current one) where the
+"   buffer is visible; else -1. 
+"*******************************************************************************
+    if tabpagenr('$') == 1
+	return -1   " There's only one tab. 
+    endif
+
+    let l:targetBufNr = bufnr( a:filespec )
+    if l:targetBufNr == -1
+	return -1   " There's no such buffer. 
+    endif
+
+    for l:tabPage in range( 1, tabpagenr('$') )
+	if l:tabPage == tabpagenr()
+	    continue	" Skip current tab page. 
+	endif
+	for l:bufNr in tabpagebuflist( l:tabPage )
+	    if l:bufNr == l:targetBufNr
+		return l:tabPage	" Found the buffer on this tab page. 
+	    endif
+	endfor
+    endfor
+    return -1
 endfunction
 
 function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
@@ -284,7 +344,8 @@ function! s:DropSingleFile( filespecInExSyntax )
     elseif s:IsVisibleWindow( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
 	let l:dropActionNr = 100
     else
-	let l:dropActionNr = s:QueryActionNrForSingleFile( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
+	let l:tabPageNr = s:GetTabPageNr( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
+	let l:dropActionNr = s:QueryActionNrForSingleFile( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax), (l:tabPageNr != -1) )
     endif
 
     " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
@@ -312,9 +373,16 @@ function! s:DropSingleFile( filespecInExSyntax )
 	"execute 'drop' . ' ' . a:filespecInExSyntax . '|only'
 	execute 'split' . ' ' . a:filespecInExSyntax . '|only'
     elseif l:dropActionNr == 8
-	execute 'tabedit' . ' '. a:filespecInExSyntax
+	execute '999tabedit' . ' '. a:filespecInExSyntax
     elseif l:dropActionNr == 9
 	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) ) . '"'
+    elseif l:dropActionNr == 10
+	" The :drop command would do the trick and switch to the correct tab
+	" page, but it is to be avoided as it adds the dropped file to the
+	" argument list. 
+	" Instead, first go to the tab page, then activate the correct window. 
+	execute 'tabnext' . ' '. l:tabPageNr
+	execute bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
