@@ -14,6 +14,13 @@
 "   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
+"	025	16-Nov-2007	ENH: Check for existence of a single dropped
+"				file, and change first query action from "edit"
+"				to "create" to provide a subtle hint to the
+"				user. 
+"				Renamed configuration variables to
+"				g:dropquery_... for consistency with other
+"				plugins. 
 "	024	04-Jun-2007	BF: Single file action "new GVIM" didn't work on
 "				Unix, because the filespec is passed in ex
 "				syntax (i.e. spaces escaped by backslashes),
@@ -88,17 +95,17 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 "-- global configuration ------------------------------------------------------
-if !exists("g:dropqueryRemapDrop")
+if !exists("g:dropquery_RemapDrop")
     " If set, remaps the built-in ':drop' command to use ':Drop' instead. 
     " With this option, other integrations (e.g. VisVim) need not be modified to
     " use the dropquery functionality. 
-    let g:dropqueryRemapDrop = 1
+    let g:dropquery_RemapDrop = 1
 endif
 
-if !exists("g:dropqueryNoDialog")
+if !exists("g:dropquery_NoDialog")
     " If set, never uses a pop-up dialog in the GUI VIM. Instead, a textual
     " query (as is done in the console VIM) is used. 
-    let g:dropqueryNoDialog = 0
+    let g:dropquery_NoDialog = 0
 endif
 
 if has('win32')
@@ -134,13 +141,13 @@ endfunction
 
 function! s:SaveGuiOptions()
     let l:savedGuiOptions = ''
-    if has("gui") && g:dropqueryNoDialog
+    if has("gui") && g:dropquery_NoDialog
 	" Note: The dialog in the GUI version can be avoided by :set guioptions+=c
 	let l:savedGuiOptions = &guioptions
 	set guioptions+=c
     endif
 
-    if ! g:dropqueryNoDialog
+    if ! g:dropquery_NoDialog
 	" Focus on the popup dialog requires that activation of VIM from the
 	" external call has been completed, so better wait a few milliseconds to
 	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
@@ -156,7 +163,7 @@ function! s:SaveGuiOptions()
 endfunction
 
 function! s:RestoreGuiOptions( savedGuiOptions )
-    if has("gui") && g:dropqueryNoDialog
+    if has("gui") && g:dropquery_NoDialog
 	let &guioptions = a:savedGuiOptions
     endif
 endfunction
@@ -164,7 +171,14 @@ endfunction
 function! s:QueryActionNrForSingleFile( filespec )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
-    let l:dropActionNr = confirm( "Action for file " . a:filespec . " ?", "&edit\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, "Question" )
+    " The :edit command can be used to both edit an existing file and create a
+    " new file. We'd like to distinguish between the two in the query, however. 
+    " The changed action label "Create" offers a subtle hint that the dropped
+    " file does not exist. This way, the user can cancel the dropping if he
+    " doesn't want to create a new file (and mistakenly thought the dropped file
+    " already existed). 
+    let l:editAction = empty( glob( a:filespec ) ) ? '&create' : '&edit'
+    let l:dropActionNr = confirm( 'Action for file ' . a:filespec . ' ?', l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM", 1, 'Question' )
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
     return l:dropActionNr
@@ -362,7 +376,7 @@ endfunction
 " spaces. 
 :command! -nargs=1 Drop call <SID>Drop(<f-args>)
 
-if g:dropqueryRemapDrop
+if g:dropquery_RemapDrop
     cabbrev drop Drop
 endif
 
