@@ -8,9 +8,6 @@
 " LIMITATIONS:
 "
 " TODO:
-" - If a file is already open in another tab, this is not recognized, and the
-"   desired action will be queried from the user. All tabs should be searched
-"   for the file, and there should be an option "Goto tab" should be presented. 
 "
 " REVISION	DATE		REMARKS 
 "	025	16-Nov-2007	ENH: Check for existence of a single dropped
@@ -95,23 +92,23 @@
 "	0.01	23-May-2005	file creation
 
 " Avoid installing twice or when in compatible mode
-if exists("loaded_dropquery") || (v:version < 700)
+if exists('g:loaded_dropquery') || (v:version < 700)
     finish
 endif
-let loaded_dropquery = 1
+let g:loaded_dropquery = 1
 
 let s:save_cpo = &cpo
 set cpo&vim
 
 "-- global configuration ------------------------------------------------------
-if !exists("g:dropquery_RemapDrop")
+if !exists('g:dropquery_RemapDrop')
     " If set, remaps the built-in ':drop' command to use ':Drop' instead. 
     " With this option, other integrations (e.g. VisVim) need not be modified to
     " use the dropquery functionality. 
     let g:dropquery_RemapDrop = 1
 endif
 
-if !exists("g:dropquery_NoPopup")
+if !exists('g:dropquery_NoPopup')
     " If set, doesn't use a pop-up dialog in GVIM for the query. Instead, a
     " textual query (as is done in the console VIM) is used. This does not cover
     " the :confirm query "Save changes to...?" when abandoning modified buffers. 
@@ -126,7 +123,7 @@ endif
 
 "-- functions -----------------------------------------------------------------
 function! s:IsBufTheOnlyWin( bufnr )
-    let l:bufIdx = bufnr("$")
+    let l:bufIdx = bufnr('$')
     while l:bufIdx > 0
 	if l:bufIdx != a:bufnr
 	    if bufwinnr(l:bufIdx) != -1
@@ -139,19 +136,19 @@ function! s:IsBufTheOnlyWin( bufnr )
 endfunction
 
 function! s:IsEmptyEditor()
-    let l:currentBufNr = bufnr("%")
+    let l:currentBufNr = bufnr('%')
     let l:isEmptyEditor = ( 
-		\ bufname(l:currentBufNr) == "" && 
+		\ empty( bufname(l:currentBufNr) ) && 
 		\ s:IsBufTheOnlyWin(l:currentBufNr) && 
-		\ getbufvar(l:currentBufNr, "&modified") == 0 && 
-		\ getbufvar(l:currentBufNr, "&buftype") == "" 
+		\ getbufvar(l:currentBufNr, '&modified') == 0 && 
+		\ empty( getbufvar(l:currentBufNr, '&buftype') )
 		\)
     return l:isEmptyEditor
 endfunction
 
 function! s:SaveGuiOptions()
     let l:savedGuiOptions = ''
-    if has("gui") && g:dropquery_NoPopup
+    if has('gui') && g:dropquery_NoPopup
 	let l:savedGuiOptions = &guioptions
 	set guioptions+=c   " Temporarily avoid popup dialog. 
     endif
@@ -172,7 +169,7 @@ function! s:SaveGuiOptions()
 endfunction
 
 function! s:RestoreGuiOptions( savedGuiOptions )
-    if has("gui") && g:dropquery_NoPopup
+    if has('gui') && g:dropquery_NoPopup
 	let &guioptions = a:savedGuiOptions
     endif
 endfunction
@@ -212,7 +209,7 @@ endfunction
 function! s:QueryActionNrForMultipleFiles( fileNum )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
-    let l:dropActionNr = confirm( "Action for " . a:fileNum . " dropped files?", "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM", 1, "Question" )
+    let l:dropActionNr = confirm( 'Action for ' . a:fileNum . ' dropped files?', "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM", 1, 'Question' )
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
     return l:dropActionNr
@@ -425,7 +422,7 @@ function! s:Drop( filespecInExSyntaxString )
     elseif l:dropActionNr == 6
 	call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
     else
-	throw "Invalid dropActionNr!"
+	throw 'Invalid dropActionNr!'
     endif
 endfunction
 
