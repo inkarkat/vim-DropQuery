@@ -10,6 +10,13 @@
 " TODO:
 "
 " REVISION	DATE		REMARKS 
+"	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
+"				s:IsEmptyTabPage(), which is equivalent but more
+"				straightforward. 
+"				ENH: When multiple files are dropped on an empty
+"				tab page, the empty window is re-used for
+"				[v]split actions (i.e. the first file is :edited
+"				instead of :split). 
 "	025	16-Nov-2007	ENH: Check for existence of a single dropped
 "				file, and change first query action from "edit"
 "				to "create" to provide a subtle hint to the
@@ -122,28 +129,15 @@ else
 endif
 
 "-- functions -----------------------------------------------------------------
-function! s:IsBufTheOnlyWin( bufnr )
-    let l:bufIdx = bufnr('$')
-    while l:bufIdx > 0
-	if l:bufIdx != a:bufnr
-	    if bufwinnr(l:bufIdx) != -1
-		return 0
-	    endif
-	endif
-	let l:bufIdx = l:bufIdx - 1
-    endwhile
-    return 1
-endfunction
-
-function! s:IsEmptyEditor()
+function! s:IsEmptyTabPage()
     let l:currentBufNr = bufnr('%')
-    let l:isEmptyEditor = ( 
+    let l:isEmptyTabPage = ( 
 		\ empty( bufname(l:currentBufNr) ) && 
-		\ s:IsBufTheOnlyWin(l:currentBufNr) && 
+		\ tabpagewinnr(tabpagenr(), '$') <= 1 && 
 		\ getbufvar(l:currentBufNr, '&modified') == 0 && 
 		\ empty( getbufvar(l:currentBufNr, '&buftype') )
 		\)
-    return l:isEmptyEditor
+    return l:isEmptyTabPage
 endfunction
 
 function! s:SaveGuiOptions()
@@ -257,7 +251,7 @@ function! s:GetTabPageNr( filespec )
     return -1
 endfunction
 
-function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
+function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespec, filespecs )
 "*******************************************************************************
 "* PURPOSE:
 "   Executes a:excommand for each filespec in a:filespecs. 
@@ -266,16 +260,22 @@ function! s:ExecuteForEachFile( excommand, isQuoteFilespec, filespecs )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:isQuoteFilespec	Flag whether the filespec should be double-quoted. 
-"   a:filespecs		List of filespecs in ex syntax. 
+"   a:excommand		    ex command which will be invoked with each filespec. 
+"   a:specialFirstExcommand ex command which will be invoked for the first filespec. 
+"			    If empty, the a:excommand will be invoked for the
+"			    first filespec just like any other. 
+"   a:isQuoteFilespec	    Flag whether the filespec should be double-quoted. 
+"   a:filespecs		    List of filespecs in ex syntax. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
+    let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:filespec in a:filespecs
 	if a:isQuoteFilespec
 	    let l:filespec = '"' . s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(l:filespec) ) . '"'
 	endif
-	execute a:excommand . ' ' . l:filespec
+	execute l:excommand . ' ' . l:filespec
+	let l:excommand = a:excommand
     endfor
 endfunction
 
@@ -336,7 +336,7 @@ function! s:DropSingleFile( filespecInExSyntax )
 "*******************************************************************************
 "****D echo '**** Dropped filespec is "' . a:filespecInExSyntax . '". '
 
-    if s:IsEmptyEditor()
+    if s:IsEmptyTabPage()
 	let l:dropActionNr = 1
     elseif s:IsVisibleWindow( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
 	let l:dropActionNr = 100
@@ -414,13 +414,13 @@ function! s:Drop( filespecInExSyntaxString )
 	execute 'confirm args' . ' ' . a:filespecInExSyntaxString
 	args
     elseif l:dropActionNr == 3
-	call s:ExecuteForEachFile( 'belowright split', 0, l:filespecs )
+	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
     elseif l:dropActionNr == 4
-	call s:ExecuteForEachFile( 'belowright vsplit', 0, l:filespecs )
+	call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
     elseif l:dropActionNr == 5
-	call s:ExecuteForEachFile( 'tabedit', 0, l:filespecs )
+	call s:ExecuteForEachFile( 'tabedit', '', 0, l:filespecs )
     elseif l:dropActionNr == 6
-	call s:ExecuteForEachFile( s:exCommandForExternalGvim, 1, l:filespecs )
+	call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:filespecs )
     else
 	throw 'Invalid dropActionNr!'
     endif
