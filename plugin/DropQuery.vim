@@ -3,7 +3,7 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " DEPENDENCIES:
-"   - Requires VIM 7.0. 
+"   - Requires VIM 7.0 or higher. 
 "
 " LIMITATIONS:
 "
@@ -15,8 +15,11 @@
 "				straightforward. 
 "				ENH: When multiple files are dropped on an empty
 "				tab page, the empty window is re-used for
-"				[v]split actions (i.e. the first file is :edited
-"				instead of :split). 
+"				:[v]split and :tabedit actions (i.e. the first
+"				file is :edited instead of :split). 
+"				ENH: Offer to "open new tab and ask again" when
+"				multiple files are dropped. This allows to
+"				[v]split all dropped files in a separate tab. 
 "	025	16-Nov-2007	ENH: Check for existence of a single dropped
 "				file, and change first query action from "edit"
 "				to "create" to provide a subtle hint to the
@@ -203,7 +206,14 @@ endfunction
 function! s:QueryActionNrForMultipleFiles( fileNum )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
-    let l:dropActionNr = confirm( 'Action for ' . a:fileNum . ' dropped files?', "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM", 1, 'Question' )
+    while 1
+	let l:dropActionNr = confirm( 'Action for ' . a:fileNum . ' dropped files?', "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question' )
+	if l:dropActionNr == 7
+	    tabnew
+	else
+	    break
+	endif
+    endwhile
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
     return l:dropActionNr
@@ -418,7 +428,7 @@ function! s:Drop( filespecInExSyntaxString )
     elseif l:dropActionNr == 4
 	call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
     elseif l:dropActionNr == 5
-	call s:ExecuteForEachFile( 'tabedit', '', 0, l:filespecs )
+	call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
     elseif l:dropActionNr == 6
 	call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:filespecs )
     else
