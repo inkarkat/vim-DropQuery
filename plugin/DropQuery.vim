@@ -8,6 +8,7 @@
 " LIMITATIONS:
 "
 " TODO:
+"   - Handle ++enc=... and +cmd=... as part of the :drop command. 
 "
 " REVISION	DATE		REMARKS 
 "	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
