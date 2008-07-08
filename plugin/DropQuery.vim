@@ -11,6 +11,7 @@
 "   - Handle ++enc=... and +cmd=... as part of the :drop command. 
 "
 " REVISION	DATE		REMARKS 
+"	027	28-Jun-2008	Added Windows detection via has('win64'). 
 "	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
 "				s:IsEmptyTabPage(), which is equivalent but more
 "				straightforward. 
@@ -126,7 +127,7 @@ if !exists('g:dropquery_NoPopup')
     let g:dropquery_NoPopup = 0
 endif
 
-if has('win32')
+if has('win32') || has('win64')
     let s:exCommandForExternalGvim = 'silent !start gvim'
 else
     let s:exCommandForExternalGvim = 'silent ! gvim'
