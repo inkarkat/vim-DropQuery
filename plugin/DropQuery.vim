@@ -11,6 +11,14 @@
 "   - Handle ++enc=... and +cmd=... as part of the :drop command. 
 "
 " REVISION	DATE		REMARKS 
+"	028	09-Jul-2008	BF: Properly anchoring filespecs for bufnr() and
+"				bufwinnr() commands via
+"				s:EscapeNormalFilespecForBufCommand() to avoid
+"				that dropping 'test.txt' jumps to
+"				'test.txt.20080709a' because of the partial
+"				match. 
+"				Working around the fact that glob() hides
+"				'wildignore'd files by using filereadable(). 
 "	027	28-Jun-2008	Added Windows detection via has('win64'). 
 "	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
 "				s:IsEmptyTabPage(), which is equivalent but more
@@ -182,7 +190,7 @@ function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
     " file does not exist. This way, the user can cancel the dropping if he
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
-    let l:editAction = empty( glob( a:filespec ) ) ? '&create' : '&edit'
+    let l:editAction = empty( filereadable( a:filespec ) ) ? '&create' : '&edit'
     let l:actions = l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM"
     if a:isOpenInAnotherTabPage
 	let l:actions = "&goto tab\n" . l:actions
@@ -222,7 +230,7 @@ function! s:QueryActionNrForMultipleFiles( fileNum )
 endfunction
 
 function! s:IsVisibleWindow( filespec )
-    let l:winNr = bufwinnr( a:filespec )
+    let l:winNr = bufwinnr( s:EscapeNormalFilespecForBufCommand(a:filespec) )
     return l:winNr != -1
 endfunction
 
@@ -245,7 +253,7 @@ function! s:GetTabPageNr( filespec )
 	return -1   " There's only one tab. 
     endif
 
-    let l:targetBufNr = bufnr( a:filespec )
+    let l:targetBufNr = bufnr( s:EscapeNormalFilespecForBufCommand(a:filespec) )
     if l:targetBufNr == -1
 	return -1   " There's no such buffer. 
     endif
@@ -333,6 +341,26 @@ function! s:EscapeNormalFilespecForExCommand( filespec )
     return substitute( a:filespec, '[\\%#!]', '\\\0', 'g' )
 endfunction
 
+function! s:EscapeNormalFilespecForBufCommand( filespec )
+"*******************************************************************************
+"* PURPOSE:
+"   Escape a normal filespec syntax so that it can be used for the bufname(),
+"   bufnr(), bufwinnr(), ... commands. 
+"   The filespec must be anchored to ^ and $, and special file-pattern
+"   characters must be escaped. The special filenames '#' and '%' need not be
+"   escaped when they are anchored or occur within a longer filespec. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"	? Explanation of each argument that isn't obvious.
+"* RETURN VALUES: 
+"	? Explanation of the value returned.
+"*******************************************************************************
+    return '^' . escape(a:filespec, '*?,{}[]\') . '$'
+endfunction
+
 function! s:DropSingleFile( filespecInExSyntax )
 "*******************************************************************************
 "* PURPOSE:
@@ -391,13 +419,13 @@ function! s:DropSingleFile( filespecInExSyntax )
 	" argument list. 
 	" Instead, first go to the tab page, then activate the correct window. 
 	execute 'tabnext' . ' '. l:tabPageNr
-	execute bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
+	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax))) . 'wincmd w'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
 	"execute "drop" . " " . a:filespecInExSyntax
-	execute bufwinnr(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)) . 'wincmd w'
+	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax))) . 'wincmd w'
     else
 	throw 'Invalid dropActionNr!'
     endif
