@@ -19,6 +19,8 @@
 "				match. 
 "				Working around the fact that glob() hides
 "				'wildignore'd files by using filereadable(). 
+"				ENH: Correctly handling file-patterns (e.g.
+"				*.txt) now. 
 "	027	28-Jun-2008	Added Windows detection via has('win64'). 
 "	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
 "				s:IsEmptyTabPage(), which is equivalent but more
@@ -431,12 +433,29 @@ function! s:DropSingleFile( filespecInExSyntax )
     endif
 endfunction
 
-function! s:Drop( filespecInExSyntaxString )
-    let l:filespecs = split( a:filespecInExSyntaxString, '\\\@<! ')
+function! s:ResolveFilePatterns( filePatterns )
+    let l:filespecs = []
+    for l:filePattern in a:filePatterns
+	let l:filespecs += split( glob(l:filePattern), "\n" )
+    endfor
+    return l:filespecs
+endfunction
+
+function! s:Drop( filePatternsInExSyntaxString )
+    let l:filePatterns = split( a:filePatternsInExSyntaxString, '\\\@<! ')
+    if empty( l:filePatterns )
+	throw 'Must pass at least one filespec / pattern!'
+    endif
+
+    let l:filespecs = s:ResolveFilePatterns( l:filePatterns )
+
     if empty( l:filespecs )
-	throw 'Must pass at least one filespec!'
+	echohl WarningMsg
+	echo 'The file-pattern ''' . a:filePatternsInExSyntaxString . ''' resulted in no matches. '
+	echohl None
+	return
     elseif len( l:filespecs ) == 1
-	call s:DropSingleFile( a:filespecInExSyntaxString )
+	call s:DropSingleFile( l:filespecs[0] )
 	return
     endif
 
@@ -448,10 +467,13 @@ function! s:Drop( filespecInExSyntaxString )
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	execute '999argadd' . ' ' . a:filespecInExSyntaxString
+	" Note: Instead of re-assembling the l:filespecs, we pass the original
+	" file-patterns, as the :argadd / :args ex commands understand them,
+	" too. 
+	execute '999argadd' . ' ' . a:filePatternsInExSyntaxString
 	args
     elseif l:dropActionNr == 2
-	execute 'confirm args' . ' ' . a:filespecInExSyntaxString
+	execute 'confirm args' . ' ' . a:filePatternsInExSyntaxString
 	args
     elseif l:dropActionNr == 3
 	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
@@ -467,7 +489,7 @@ function! s:Drop( filespecInExSyntaxString )
 endfunction
 
 "-- commands ------------------------------------------------------------------
-" The filespec passed to :drop should conform to ex syntax, just as the
+" The file-pattern passed to :drop should conform to ex syntax, just as the
 " built-in :drop command would expect them:
 " - spaces, [%#] are escaped with '\'
 " - path delimiters are forward slashes; backslashes are only used for
@@ -475,11 +497,11 @@ endfunction
 " - no enclosing of filespecs in double quotes
 "
 " Note to -nargs=1:
-" A maximum of 20 arguments can be passed to a Vim function. The built-in :drop
-" command supports more files, though. To work around this limitation, all
-" files are passed to the s:Drop() function as one string; the function itself
-" will split that into filespecs. Splitting is done on (unescaped) spaces, as
-" the filespecs to :drop are not enclosed by double quotes, but contain escaped
+" A maximum of 20 arguments can be passed to a VIM function. The built-in :drop
+" command supports more, though. To work around this limitation, everything is
+" passed to the s:Drop() function as one string; the function itself will split
+" that into file patterns. Splitting is done on (unescaped) spaces, as the
+" file-patterns to :drop are not enclosed by double quotes, but contain escaped
 " spaces. 
 :command! -nargs=1 Drop call <SID>Drop(<f-args>)
 
