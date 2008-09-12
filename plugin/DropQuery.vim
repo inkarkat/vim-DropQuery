@@ -61,7 +61,7 @@
 "				s:EscapeNormalFilespecForExCommand(); the
 "				filespec for the external GVIM command is now
 "				double-quoted and processed through
-"				s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec( filespec ) ). 
+"				s:EscapeNormalFilespecForExCommand( s:ConvertExfilespecToNormalFilespec( filespec ) ). 
 "				BF: In the :! ex command, the character '!' must
 "				also be escaped. (It stands for the previously
 "				executed :! command.) Now escaping [%#!] in
@@ -71,7 +71,7 @@
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
 "				Switched main filespec format from normal to ex
 "				syntax; VIM commands and user display use
-"				s:ConvertFilespecInExSyntaxToNormalFilespec() to
+"				s:ConvertExfilespecToNormalFilespec() to
 "				unescape the ex syntax; that was formerly done
 "				by -complete=file. 
 "				Multiple files are passed as one string
@@ -276,10 +276,10 @@ function! s:GetTabPageNr( filespec )
     return -1
 endfunction
 
-function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespec, filespecs )
+function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespec, exfilespecs )
 "*******************************************************************************
 "* PURPOSE:
-"   Executes a:excommand for each filespec in a:filespecs. 
+"   Executes a:excommand for each filespec in a:exfilespecs. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -290,27 +290,27 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespe
 "			    If empty, the a:excommand will be invoked for the
 "			    first filespec just like any other. 
 "   a:isQuoteFilespec	    Flag whether the filespec should be double-quoted. 
-"   a:filespecs		    List of filespecs in ex syntax. 
+"   a:exfilespecs	    List of filespecs in ex syntax. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
-    for l:filespec in a:filespecs
+    for l:exfilespec in a:exfilespecs
 	if a:isQuoteFilespec
-	    let l:filespec = '"' . s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(l:filespec) ) . '"'
+	    let l:exfilespec = '"' . s:EscapeNormalFilespecForExCommand( s:ConvertExfilespecToNormalFilespec(l:exfilespec), l:excommand ) . '"'
 	endif
-	execute l:excommand . ' ' . l:filespec
+	execute l:excommand . ' ' . l:exfilespec
 	let l:excommand = a:excommand
     endfor
 endfunction
 
-function! s:ConvertFilespecInExSyntaxToNormalFilespec( filespecInExSyntax )
+function! s:ConvertExfilespecToNormalFilespec( exfilespec )
 "*******************************************************************************
 "* PURPOSE:
-"   Converts the passed a:filespecInExSyntax to the normal filespec syntax
-"   (i.e. no escaping of [%#], possibly backslashes as path separator). The
-"   normal syntax is required by VIM functions such as bufwinnr(), because they
-"   do not understand the escaping of [%#] for ex commands. 
+"   Converts the passed a:exfilespec to the normal filespec syntax (i.e. no
+"   escaping of [%#], possibly backslashes as path separator). The normal syntax
+"   is required by VIM functions such as bufwinnr(), because they do not
+"   understand the escaping of [%#] for ex commands. 
 "   Note: On Windows, fnamemodify() doesn't convert path separators to
 "   backslashes. We don't do that neither, as forward slashes work just as well
 "   and there is less potential for problems. 
@@ -323,11 +323,11 @@ function! s:ConvertFilespecInExSyntaxToNormalFilespec( filespecInExSyntax )
 "* RETURN VALUES: 
 "	? Explanation of the value returned.
 "*******************************************************************************
-    "return fnamemodify( substitute( a:filespecInExSyntax, '\\\([ \\%#]\)', '\1', 'g'), ':p' )
-    return fnamemodify( a:filespecInExSyntax, ':gs+\\\([ \\%#]\)+\1+:p' )
+    "return fnamemodify( substitute( a:exfilespec, '\\\([ \\%#]\)', '\1', 'g'), ':p' )
+    return fnamemodify( a:exfilespec, ':gs+\\\([ \\%#]\)+\1+:p' )
 endfunction
 
-function! s:EscapeNormalFilespecForExCommand( filespec )
+function! s:EscapeNormalFilespecForExCommand( filespec, excommand )
 "*******************************************************************************
 "* PURPOSE:
 "   Escaped a normal filespec syntax so that it can be used in the ':! command
@@ -339,11 +339,16 @@ function! s:EscapeNormalFilespecForExCommand( filespec )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"	? Explanation of each argument that isn't obvious.
+"   a:filespec	    normal filespec
+"   a:excommand	    ex command for which a:filespec should be escaped. Can be
+"		    empty, which signifies any vanilla ex command. There's only
+"		    a special case for the :! command. 
 "* RETURN VALUES: 
 "	? Explanation of the value returned.
 "*******************************************************************************
-    return substitute( a:filespec, '[\\%#!]', '\\\0', 'g' )
+    let l:isBangCommand = (a:excommand =~# '^\s*\%(silent\s\+\)\?!')
+echomsg '****' a:excommand l:isBangCommand
+    return substitute( a:filespec, '[\\%#' . (l:isBangCommand ? '!' : '') . ']', '\\\0', 'g' )
 endfunction
 
 function! s:EscapeNormalFilespecForBufCommand( filespec )
@@ -366,7 +371,7 @@ function! s:EscapeNormalFilespecForBufCommand( filespec )
     return '^' . escape(a:filespec, '*?,{}[]\') . '$'
 endfunction
 
-function! s:DropSingleFile( filespecInExSyntax )
+function! s:DropSingleFile( exfilespec )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file. 
@@ -375,129 +380,132 @@ function! s:DropSingleFile( filespecInExSyntax )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:filespecInExSyntax filespec of the dropped file. 
+"   a:exfilespec filespec of the dropped file. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
-"****D echo '**** Dropped filespec is "' . a:filespecInExSyntax . '". '
+"****D echo '**** Dropped filespec is "' . a:exfilespec . '". '
+    let l:filespec = s:ConvertExfilespecToNormalFilespec(a:exfilespec)
 
     if s:IsEmptyTabPage()
 	let l:dropActionNr = 1
-    elseif s:IsVisibleWindow( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
+    elseif s:IsVisibleWindow(l:filespec)
 	let l:dropActionNr = 100
     else
-	let l:tabPageNr = s:GetTabPageNr( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) )
-	let l:dropActionNr = s:QueryActionNrForSingleFile( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax), (l:tabPageNr != -1) )
+	let l:tabPageNr = s:GetTabPageNr(l:filespec)
+	let l:dropActionNr = s:QueryActionNrForSingleFile( l:filespec, (l:tabPageNr != -1) )
     endif
 
     " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
     if l:dropActionNr <= 0
 	echohl WarningMsg
-	echo 'Canceled opening of file ' . s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax)
+	echo 'Canceled opening of file ' . l:filespec
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	execute 'confirm edit' . ' ' . a:filespecInExSyntax
+	execute 'confirm edit' . ' ' . a:exfilespec
     elseif l:dropActionNr == 2
-	execute 'belowright split' . ' ' . a:filespecInExSyntax
+	execute 'belowright split' . ' ' . a:exfilespec
     elseif l:dropActionNr == 3
-	execute 'belowright vsplit' . ' ' . a:filespecInExSyntax
+	execute 'belowright vsplit' . ' ' . a:exfilespec
     elseif l:dropActionNr == 4
-	execute 'confirm pedit' . ' ' . a:filespecInExSyntax
+	execute 'confirm pedit' . ' ' . a:exfilespec
     elseif l:dropActionNr == 5
-	execute 'confirm argedit' . ' ' . a:filespecInExSyntax
+	execute 'confirm argedit' . ' ' . a:exfilespec
 	args
     elseif l:dropActionNr == 6
-	execute '999argadd' . ' ' . a:filespecInExSyntax
+	execute '999argadd' . ' ' . a:exfilespec
 	args
     elseif l:dropActionNr == 7
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	"execute 'drop' . ' ' . a:filespecInExSyntax . '|only'
-	execute 'split' . ' ' . a:filespecInExSyntax . '|only'
+	"execute 'drop' . ' ' . a:exfilespec . '|only'
+	execute 'split' . ' ' . a:exfilespec . '|only'
     elseif l:dropActionNr == 8
-	execute '999tabedit' . ' '. a:filespecInExSyntax
+	execute '999tabedit' . ' '. a:exfilespec
     elseif l:dropActionNr == 9
-	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand( s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax) ) . '"'
+	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand(l:filespec, s:exCommandForExternalGvim) . '"'
     elseif l:dropActionNr == 10
 	" The :drop command would do the trick and switch to the correct tab
 	" page, but it is to be avoided as it adds the dropped file to the
 	" argument list. 
 	" Instead, first go to the tab page, then activate the correct window. 
 	execute 'tabnext' . ' '. l:tabPageNr
-	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax))) . 'wincmd w'
+	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
     elseif l:dropActionNr == 100
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	" Do not use the :drop command to activate the window which contains the
 	" dropped file. 
-	"execute "drop" . " " . a:filespecInExSyntax
-	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(s:ConvertFilespecInExSyntaxToNormalFilespec(a:filespecInExSyntax))) . 'wincmd w'
+	"execute "drop" . " " . a:exfilespec
+	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
     else
 	throw 'Invalid dropActionNr!'
     endif
 endfunction
 
-function! s:ResolveFilePatterns( filePatterns )
-    let l:filespecs = []
-    for l:filePattern in a:filePatterns
-	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
+function! s:ResolveExfilePatterns( exfilePatterns )
+    let l:exfilespecs = []
+    for l:exfilePattern in a:exfilePatterns
+	let l:filePattern = s:ConvertExfilespecToNormalFilespec(l:exfilePattern)
+	" Note: glob() returns the native path separator, but we always want to
+	" use forward slashes to avoid problems. 
+	let l:resolvedFilespecs = split( substitute(glob(l:filePattern), '\', '/', 'g'), "\n" )
 	if empty(l:resolvedFilespecs) && filereadable(l:filePattern)
 	    " The globbing yielded no files; however, the file pattern itself
 	    " represents an existing file. This happens if a file is passed that
 	    " matches one of the 'wildignore' patterns. In this case, as the
 	    " file has been explicitly passed to us, we include it. 
-	    let l:filespecs += [l:filePattern]
+	    let l:exfilespecs += [l:exfilePattern]
 	else
-	    " The passed file pattern contained wildcard characters; we include
-	    " whatever the globbing returns. 'wildignore' patterns are filtered
-	    " out. 
-	    let l:filespecs += l:resolvedFilespecs
+	    " We include whatever the globbing returned, converted to ex syntax.
+	    " 'wildignore' patterns are filtered out. 
+	    let l:exfilespecs += map(copy(l:resolvedFilespecs), 's:EscapeNormalFilespecForExCommand(v:val, "")')
 	endif
     endfor
-    return l:filespecs
+    return l:exfilespecs
 endfunction
 
-function! s:Drop( filePatternsInExSyntaxString )
-    let l:filePatterns = split( a:filePatternsInExSyntaxString, '\\\@<! ')
-    if empty( l:filePatterns )
+function! s:Drop( exfilePatternsString )
+    let l:exfilePatterns = split( a:exfilePatternsString, '\\\@<! ')
+    if empty( l:exfilePatterns )
 	throw 'Must pass at least one filespec / pattern!'
     endif
 
-    let l:filespecs = s:ResolveFilePatterns( l:filePatterns )
-
-    if empty( l:filespecs )
+    let l:exfilespecs = s:ResolveExfilePatterns( l:exfilePatterns )
+echomsg '****' string(l:exfilespecs)
+    if empty(l:exfilespecs)
 	echohl WarningMsg
-	echo 'The file-pattern ''' . a:filePatternsInExSyntaxString . ''' resulted in no matches. '
+	echo 'The file-pattern ''' . a:exfilePatternsString . ''' resulted in no matches. '
 	echohl None
 	return
-    elseif len( l:filespecs ) == 1
-	call s:DropSingleFile( l:filespecs[0] )
+    elseif len(l:exfilespecs) == 1
+	call s:DropSingleFile(l:exfilespecs[0])
 	return
     endif
 
-    let l:dropActionNr = s:QueryActionNrForMultipleFiles( len(l:filespecs) )
+    let l:dropActionNr = s:QueryActionNrForMultipleFiles(len(l:exfilespecs))
 
     if l:dropActionNr <= 0
 	echohl WarningMsg
-	echo 'Canceled opening of ' . len(l:filespecs) . ' files. '
+	echo 'Canceled opening of ' . len(l:exfilespecs) . ' files. '
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	" Note: Instead of re-assembling the l:filespecs, we pass the original
-	" file-patterns, as the :argadd / :args ex commands understand them,
-	" too. 
-	execute '999argadd' . ' ' . a:filePatternsInExSyntaxString
+	" Note: Instead of re-assembling the l:exfilespecs, we pass the
+	" original file-patterns, as the :argadd / :args ex commands understand
+	" them, too. 
+	execute '999argadd' . ' ' . a:exfilePatternsString
 	args
     elseif l:dropActionNr == 2
-	execute 'confirm args' . ' ' . a:filePatternsInExSyntaxString
+	execute 'confirm args' . ' ' . a:exfilePatternsString
 	args
     elseif l:dropActionNr == 3
-	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
+	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
     elseif l:dropActionNr == 4
-	call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
+	call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
     elseif l:dropActionNr == 5
-	call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:filespecs )
+	call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
     elseif l:dropActionNr == 6
-	call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:filespecs )
+	call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:exfilespecs )
     else
 	throw 'Invalid dropActionNr!'
     endif
