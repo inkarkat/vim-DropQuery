@@ -19,6 +19,11 @@
 "				Refactored special '!' escaping for :! ex
 "				command. 
 "				Reworked Escape...() functions. 
+"				BF: Introduced s:ExecuteWithoutWildignore()
+"				because :args and :argadd obey 'wildignore';
+"				now, normally ignored files can be put on the
+"				argument list if they are passed explicitly (not
+"				via a file pattern). 
 "	029	14-Jul-2008	BF: Including 'wildignore'd files if they are
 "				explicitly passed, but not if they would match a
 "				file pattern. 
@@ -340,6 +345,31 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespe
 	let l:excommand = a:excommand
     endfor
 endfunction
+function! s:ExecuteWithoutWildignore( excommand, exfilespecs )
+"*******************************************************************************
+"* PURPOSE:
+"   Executes a:excommand with all a:exfilespecs passed as arguments while
+"   'wildignore' is temporarily  disabled. This allows to introduce filespecs to
+"   the argument list (:args ..., :argadd ...) which would normally be filtered
+"   by 'wildignore'. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   a:excommand		    ex command to be invoked
+"   a:exfilespecs	    List of filespecs in ex syntax. 
+"* RETURN VALUES: 
+"   none
+"*******************************************************************************
+    let l:save_wildignore = &wildignore
+    set wildignore=
+    try
+	execute a:excommand . ' ' . join(a:exfilespecs, ' ')
+    finally
+	let &wildignore = l:save_wildignore
+    endtry
+endfunction
 
 function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
     let l:savedGuiOptions = s:SaveGuiOptions()
@@ -431,7 +461,7 @@ function! s:DropSingleFile( exfilespec )
 	execute 'confirm argedit' . ' ' . a:exfilespec
 	args
     elseif l:dropActionNr == 6
-	execute '999argadd' . ' ' . a:exfilespec
+	call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
 	args
     elseif l:dropActionNr == 7
 	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
@@ -440,7 +470,7 @@ function! s:DropSingleFile( exfilespec )
     elseif l:dropActionNr == 8
 	execute '999tabedit' . ' '. a:exfilespec
     elseif l:dropActionNr == 9
-	execute s:exCommandForExternalGvim . ' "'. s:EscapeNormalFilespecForExCommand(l:filespec) . '"'
+	execute s:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), s:exCommandForExternalGvim) . '"'
     elseif l:dropActionNr == 10
 	" The :drop command would do the trick and switch to the correct tab
 	" page, but it is to be avoided as it adds the dropped file to the
@@ -462,9 +492,7 @@ function! s:ResolveExfilePatterns( exfilePatterns )
     let l:exfilespecs = []
     for l:exfilePattern in a:exfilePatterns
 	let l:filePattern = s:ConvertExfilespecToNormalFilespec(l:exfilePattern)
-	" Note: glob() returns the native path separator, but we always want to
-	" use forward slashes to avoid problems. 
-	let l:resolvedFilespecs = split( substitute(glob(l:filePattern), '\', '/', 'g'), "\n" )
+	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
 	if empty(l:resolvedFilespecs) && filereadable(l:filePattern)
 	    " The globbing yielded no files; however, the file pattern itself
 	    " represents an existing file. This happens if a file is passed that
@@ -505,13 +533,10 @@ function! s:Drop( exfilePatternsString )
 	echohl None
 	return
     elseif l:dropActionNr == 1
-	" Note: Instead of re-assembling the l:exfilespecs, we pass the
-	" original file-patterns, as the :argadd / :args ex commands understand
-	" them, too. 
-	execute '999argadd' . ' ' . a:exfilePatternsString
+	call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
 	args
     elseif l:dropActionNr == 2
-	execute 'confirm args' . ' ' . a:exfilePatternsString
+	call s:ExecuteWithoutWildignore('confirm args', l:exfilespecs)
 	args
     elseif l:dropActionNr == 3
 	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
