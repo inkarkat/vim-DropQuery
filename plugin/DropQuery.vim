@@ -11,6 +11,9 @@
 "   - Handle ++enc=... and +cmd=... as part of the :drop command. 
 "
 " REVISION	DATE		REMARKS 
+"	029	14-Jul-2008	BF: Including 'wildignore'd files if they are
+"				explicitly passed, but not if they would match a
+"				file pattern. 
 "	028	09-Jul-2008	BF: Properly anchoring filespecs for bufnr() and
 "				bufwinnr() commands via
 "				s:EscapeNormalFilespecForBufCommand() to avoid
@@ -436,7 +439,19 @@ endfunction
 function! s:ResolveFilePatterns( filePatterns )
     let l:filespecs = []
     for l:filePattern in a:filePatterns
-	let l:filespecs += split( glob(l:filePattern), "\n" )
+	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
+	if empty(l:resolvedFilespecs) && filereadable(l:filePattern)
+	    " The globbing yielded no files; however, the file pattern itself
+	    " represents an existing file. This happens if a file is passed that
+	    " matches one of the 'wildignore' patterns. In this case, as the
+	    " file has been explicitly passed to us, we include it. 
+	    let l:filespecs += [l:filePattern]
+	else
+	    " The passed file pattern contained wildcard characters; we include
+	    " whatever the globbing returns. 'wildignore' patterns are filtered
+	    " out. 
+	    let l:filespecs += l:resolvedFilespecs
+	endif
     endfor
     return l:filespecs
 endfunction
