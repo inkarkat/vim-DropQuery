@@ -1,4 +1,4 @@
-" dropquery.vim: Ask the user how a :drop'ed file be opened. 
+" dropquery.vim: Ask the user how a :drop'ped file be opened. 
 "
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
@@ -24,6 +24,8 @@
 "				now, normally ignored files can be put on the
 "				argument list if they are passed explicitly (not
 "				via a file pattern). 
+"				Now using <q-args> and -nargs=+ to allow
+"				completion on all items. 
 "	029	14-Jul-2008	BF: Including 'wildignore'd files if they are
 "				explicitly passed, but not if they would match a
 "				file pattern. 
@@ -559,14 +561,15 @@ endfunction
 "   escaping. 
 " - no enclosing of filespecs in double quotes
 "
-" Note to -nargs=1:
 " A maximum of 20 arguments can be passed to a VIM function. The built-in :drop
 " command supports more, though. To work around this limitation, everything is
-" passed to the s:Drop() function as one string; the function itself will split
-" that into file patterns. Splitting is done on (unescaped) spaces, as the
-" file-patterns to :drop are not enclosed by double quotes, but contain escaped
-" spaces. 
-:command! -nargs=1 Drop call <SID>Drop(<f-args>)
+" passed to the s:Drop() function as one string by using <q-args> instead of
+" <f-args>; the function itself will split that into file patterns. Splitting is
+" done on (unescaped) spaces, as the file-patterns to :drop are not enclosed by
+" double quotes, but contain escaped spaces. 
+" We do specify multiple arguments, so that file completion works for all
+" arguments. 
+:command! -nargs=+ -complete=file Drop call <SID>Drop(<q-args>)
 
 if g:dropquery_RemapDrop
     cabbrev drop Drop
