@@ -12,6 +12,7 @@
 "   - Use new shellescape() function?
 "
 " REVISION	DATE		REMARKS 
+"	031	07-Jan-2009	Small BF: Using has('gui_running'). 
 "	030	13-Sep-2008	BF: In ResolveExfilePatterns(), mixed up normal
 "				filespec returned from glob() with exfilespecs. 
 "				Renamed ...InExSyntax to ex... to shorten
@@ -295,7 +296,7 @@ endfunction
 
 function! s:SaveGuiOptions()
     let l:savedGuiOptions = ''
-    if has('gui') && g:dropquery_NoPopup
+    if has('gui_running') && g:dropquery_NoPopup
 	let l:savedGuiOptions = &guioptions
 	set guioptions+=c   " Temporarily avoid popup dialog. 
     endif
@@ -315,7 +316,7 @@ function! s:SaveGuiOptions()
     return l:savedGuiOptions
 endfunction
 function! s:RestoreGuiOptions( savedGuiOptions )
-    if has('gui') && g:dropquery_NoPopup
+    if has('gui_running') && g:dropquery_NoPopup
 	let &guioptions = a:savedGuiOptions
     endif
 endfunction
