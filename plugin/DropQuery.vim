@@ -12,6 +12,10 @@
 "   - Use new shellescape() function?
 "
 " REVISION	DATE		REMARKS 
+"	032	11-Feb-2009	Factored out s:WarningMsg(). 
+"				BF: Now catching VIM errors in s:Drop() and
+"				s:DropSingleFile(); these may happened e.g. when
+"				the :only fails due to a modified buffer. 
 "	031	07-Jan-2009	Small BF: Using has('gui_running'). 
 "	030	13-Sep-2008	BF: In ResolveExfilePatterns(), mixed up normal
 "				filespec returned from glob() with exfilespecs. 
@@ -163,6 +167,13 @@ else
 endif
 
 "-- functions -----------------------------------------------------------------
+function! s:WarningMsg( text )
+    echohl WarningMsg
+    let v:warningmsg = a:text
+    echomsg v:warningmsg
+    echohl None
+endfunction
+
 function! s:ConvertExfilespecToNormalFilespec( exfilespec )
 "*******************************************************************************
 "* PURPOSE:
@@ -446,50 +457,57 @@ function! s:DropSingleFile( exfilespec )
 	let l:dropActionNr = s:QueryActionNrForSingleFile( l:filespec, (l:tabPageNr != -1) )
     endif
 
-    " BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
-    if l:dropActionNr <= 0
-	echohl WarningMsg
-	echo 'Canceled opening of file ' . l:filespec
+    try
+	" BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
+	if l:dropActionNr <= 0
+	    call s:WarningMsg('Canceled opening of file ' . l:filespec)
+	    return
+	elseif l:dropActionNr == 1
+	    execute 'confirm edit' . ' ' . a:exfilespec
+	elseif l:dropActionNr == 2
+	    execute 'belowright split' . ' ' . a:exfilespec
+	elseif l:dropActionNr == 3
+	    execute 'belowright vsplit' . ' ' . a:exfilespec
+	elseif l:dropActionNr == 4
+	    execute 'confirm pedit' . ' ' . a:exfilespec
+	elseif l:dropActionNr == 5
+	    execute 'confirm argedit' . ' ' . a:exfilespec
+	    args
+	elseif l:dropActionNr == 6
+	    call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
+	    args
+	elseif l:dropActionNr == 7
+	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
+	    "execute 'drop' . ' ' . a:exfilespec . '|only'
+	    execute 'split' . ' ' . a:exfilespec . '|only'
+	elseif l:dropActionNr == 8
+	    execute '999tabedit' . ' '. a:exfilespec
+	elseif l:dropActionNr == 9
+	    execute s:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), s:exCommandForExternalGvim) . '"'
+	elseif l:dropActionNr == 10
+	    " The :drop command would do the trick and switch to the correct tab
+	    " page, but it is to be avoided as it adds the dropped file to the
+	    " argument list. 
+	    " Instead, first go to the tab page, then activate the correct window. 
+	    execute 'tabnext' . ' '. l:tabPageNr
+	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	elseif l:dropActionNr == 100
+	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
+	    " Do not use the :drop command to activate the window which contains the
+	    " dropped file. 
+	    "execute "drop" . " " . a:exfilespec
+	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	else
+	    throw 'Invalid dropActionNr!'
+	endif
+    catch /^Vim\%((\a\+)\)\=:E/
+	echohl ErrorMsg
+	" v:exception contains what is normally in v:errmsg, but with extra
+	" exception source info prepended, which we cut away. 
+	let v:errmsg = substitute(v:exception, '^Vim\%((\a\+)\)\=:', '', '')
+	echomsg v:errmsg
 	echohl None
-	return
-    elseif l:dropActionNr == 1
-	execute 'confirm edit' . ' ' . a:exfilespec
-    elseif l:dropActionNr == 2
-	execute 'belowright split' . ' ' . a:exfilespec
-    elseif l:dropActionNr == 3
-	execute 'belowright vsplit' . ' ' . a:exfilespec
-    elseif l:dropActionNr == 4
-	execute 'confirm pedit' . ' ' . a:exfilespec
-    elseif l:dropActionNr == 5
-	execute 'confirm argedit' . ' ' . a:exfilespec
-	args
-    elseif l:dropActionNr == 6
-	call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
-	args
-    elseif l:dropActionNr == 7
-	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	"execute 'drop' . ' ' . a:exfilespec . '|only'
-	execute 'split' . ' ' . a:exfilespec . '|only'
-    elseif l:dropActionNr == 8
-	execute '999tabedit' . ' '. a:exfilespec
-    elseif l:dropActionNr == 9
-	execute s:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), s:exCommandForExternalGvim) . '"'
-    elseif l:dropActionNr == 10
-	" The :drop command would do the trick and switch to the correct tab
-	" page, but it is to be avoided as it adds the dropped file to the
-	" argument list. 
-	" Instead, first go to the tab page, then activate the correct window. 
-	execute 'tabnext' . ' '. l:tabPageNr
-	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
-    elseif l:dropActionNr == 100
-	" BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	" Do not use the :drop command to activate the window which contains the
-	" dropped file. 
-	"execute "drop" . " " . a:exfilespec
-	execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
-    else
-	throw 'Invalid dropActionNr!'
-    endif
+    endtry
 endfunction
 function! s:ResolveExfilePatterns( exfilePatterns )
     let l:exfilespecs = []
@@ -519,9 +537,7 @@ function! s:Drop( exfilePatternsString )
     let l:exfilespecs = s:ResolveExfilePatterns( l:exfilePatterns )
 "****D echomsg '****' string(l:exfilespecs)
     if empty(l:exfilespecs)
-	echohl WarningMsg
-	echo 'The file-pattern ''' . a:exfilePatternsString . ''' resulted in no matches. '
-	echohl None
+	call s:WarningMsg('The file-pattern ''' . a:exfilePatternsString . ''' resulted in no matches. ')
 	return
     elseif len(l:exfilespecs) == 1
 	call s:DropSingleFile(l:exfilespecs[0])
@@ -530,28 +546,35 @@ function! s:Drop( exfilePatternsString )
 
     let l:dropActionNr = s:QueryActionNrForMultipleFiles(len(l:exfilespecs))
 
-    if l:dropActionNr <= 0
-	echohl WarningMsg
-	echo 'Canceled opening of ' . len(l:exfilespecs) . ' files. '
+    try
+	if l:dropActionNr <= 0
+	    call s:WarningMsg('Canceled opening of ' . len(l:exfilespecs) . ' files. ')
+	    return
+	elseif l:dropActionNr == 1
+	    call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
+	    args
+	elseif l:dropActionNr == 2
+	    call s:ExecuteWithoutWildignore('confirm args', l:exfilespecs)
+	    args
+	elseif l:dropActionNr == 3
+	    call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	elseif l:dropActionNr == 4
+	    call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	elseif l:dropActionNr == 5
+	    call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	elseif l:dropActionNr == 6
+	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:exfilespecs )
+	else
+	    throw 'Invalid dropActionNr!'
+	endif
+    catch /^Vim\%((\a\+)\)\=:E/
+	echohl ErrorMsg
+	" v:exception contains what is normally in v:errmsg, but with extra
+	" exception source info prepended, which we cut away. 
+	let v:errmsg = substitute(v:exception, '^Vim\%((\a\+)\)\=:', '', '')
+	echomsg v:errmsg
 	echohl None
-	return
-    elseif l:dropActionNr == 1
-	call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
-	args
-    elseif l:dropActionNr == 2
-	call s:ExecuteWithoutWildignore('confirm args', l:exfilespecs)
-	args
-    elseif l:dropActionNr == 3
-	call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-    elseif l:dropActionNr == 4
-	call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-    elseif l:dropActionNr == 5
-	call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-    elseif l:dropActionNr == 6
-	call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:exfilespecs )
-    else
-	throw 'Invalid dropActionNr!'
-    endif
+    endtry
 endfunction
 
 "-- commands ------------------------------------------------------------------
