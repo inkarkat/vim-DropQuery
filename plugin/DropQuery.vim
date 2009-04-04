@@ -420,11 +420,20 @@ function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
 
     return l:dropActionNr
 endfunction
-function! s:QueryActionNrForMultipleFiles( fileNum )
+function! s:QueryActionNrForMultipleFiles( statistics )
+    let l:fileCharacterization = 'files'
+    if a:statistics.nonexisting == a:statistics.files
+	let l:fileCharacterization = 'non-existing ' . l:fileCharacterization
+    elseif a:statistics.nonexisting > 0
+	let l:fileCharacterization .= printf(' (%d non-existing)', a:statistics.nonexisting)
+    endif
+    let l:fileNotes = (a:statistics.removed > 0 ? printf("%d file pattern%s resulted in no matches.\n", a:statistics.removed, (a:statistics.removed == 1 ? '' : 's')) : '')
+    let l:query = printf('%sAction for %d dropped %s?', l:fileNotes, a:statistics.files, l:fileCharacterization)
+
     let l:savedGuiOptions = s:SaveGuiOptions()
 
     while 1
-	let l:dropActionNr = confirm( 'Action for ' . a:fileNum . ' dropped files?', "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question' )
+	let l:dropActionNr = confirm( l:query, "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question' )
 	if l:dropActionNr == 7
 	    tabnew
 	else
@@ -513,7 +522,7 @@ function! s:DropSingleFile( exfilespec )
 	echohl None
     endtry
 endfunction
-function! s:ContainsNoPattern( filePattern )
+function! s:ContainsNoWildcards( filePattern )
     " Note: This is only an empirical approximation; it is not perfect. 
     if has('win32') || has('win64')
 	return a:filePattern !~ '[*?]'
@@ -522,26 +531,38 @@ function! s:ContainsNoPattern( filePattern )
     endif
 endfunction
 function! s:ResolveExfilePatterns( exfilePatterns )
+    let l:statistics = { 'files': 0, 'removed': 0, 'nonexisting': 0 }
     let l:exfilespecs = []
     for l:exfilePattern in a:exfilePatterns
 	let l:filePattern = s:ConvertExfilespecToNormalFilespec(l:exfilePattern)
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
-	if empty(l:resolvedFilespecs) && (filereadable(l:filePattern) || s:ContainsNoPattern(l:filePattern))
+	if empty(l:resolvedFilespecs)
 	    " The globbing yielded no files; however:
-	    " a) The file pattern itself represents an existing file. This
-	    "    happens if a file is passed that matches one of the
-	    "    'wildignore' patterns. In this case, as the file has been
-	    "    explicitly passed to us, we include it. 
-	    " b) The file contains no file-pattern and represents a
-	    "    to-be-created file. 
-	    let l:exfilespecs += [l:exfilePattern]
+	    if filereadable(l:filePattern)
+		" a) The file pattern itself represents an existing file. This
+		"    happens if a file is passed that matches one of the
+		"    'wildignore' patterns. In this case, as the file has been
+		"    explicitly passed to us, we include it. 
+		let l:exfilespecs += [l:exfilePattern]
+	    elseif s:ContainsNoWildcards(l:filePattern)
+		" b) The file pattern contains no wildcards and represents a
+		"    to-be-created file. 
+		let l:exfilespecs += [l:exfilePattern]
+		let l:statistics.nonexisting += 1
+	    else
+		" Nothing matched this file pattern, or whatever matched is
+		" covered by the 'wildignore' patterns and not a file itself. 
+		let l:statistics.removed += 1
+	    endif
 	else
 	    " We include whatever the globbing returned, converted to ex syntax.
 	    " 'wildignore' patterns are filtered out. 
 	    let l:exfilespecs += map(copy(l:resolvedFilespecs), 's:EscapeNormalFilespecForExCommand(v:val)')
 	endif
     endfor
-    return l:exfilespecs
+
+    let l:statistics.files = len(l:exfilespecs)
+    return [l:exfilespecs, l:statistics]
 endfunction
 function! s:Drop( exfilePatternsString )
     let l:exfilePatterns = split( a:exfilePatternsString, '\\\@<! ')
@@ -549,21 +570,22 @@ function! s:Drop( exfilePatternsString )
 	throw 'Must pass at least one filespec / pattern!'
     endif
 
-    let l:exfilespecs = s:ResolveExfilePatterns( l:exfilePatterns )
+    let [l:exfilespecs, l:statistics] = s:ResolveExfilePatterns(l:exfilePatterns)
+"****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:exfilespecs)
     if empty(l:exfilespecs)
-	call s:WarningMsg('The file pattern ''' . a:exfilePatternsString . ''' resulted in no matches. ')
+	call s:WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:exfilePatternsString))
 	return
-    elseif len(l:exfilespecs) == 1
+    elseif l:statistics.files == 1
 	call s:DropSingleFile(l:exfilespecs[0])
 	return
     endif
 
-    let l:dropActionNr = s:QueryActionNrForMultipleFiles(len(l:exfilespecs))
+    let l:dropActionNr = s:QueryActionNrForMultipleFiles(l:statistics)
 
     try
 	if l:dropActionNr <= 0
-	    call s:WarningMsg('Canceled opening of ' . len(l:exfilespecs) . ' files. ')
+	    call s:WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
 	    return
 	elseif l:dropActionNr == 1
 	    call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
