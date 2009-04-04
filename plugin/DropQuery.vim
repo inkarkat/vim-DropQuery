@@ -12,6 +12,10 @@
 "   - Use new shellescape() function?
 "
 " REVISION	DATE		REMARKS 
+"	033	05-Apr-2009	BF: Could not drop non-existing (i.e.
+"				to-be-created) files any more. Fixed by not
+"				categorically excluding non-existing files, only
+"				if they represent a file pattern. 
 "	032	11-Feb-2009	Factored out s:WarningMsg(). 
 "				BF: Now catching VIM errors in s:Drop() and
 "				s:DropSingleFile(); these may happened e.g. when
@@ -509,16 +513,27 @@ function! s:DropSingleFile( exfilespec )
 	echohl None
     endtry
 endfunction
+function! s:ContainsNoPattern( filePattern )
+    " Note: This is only an empirical approximation; it is not perfect. 
+    if has('win32') || has('win64')
+	return a:filePattern !~ '[*?]'
+    else
+	return a:filePattern !~ '\\\@<![*?{[]'
+    endif
+endfunction
 function! s:ResolveExfilePatterns( exfilePatterns )
     let l:exfilespecs = []
     for l:exfilePattern in a:exfilePatterns
 	let l:filePattern = s:ConvertExfilespecToNormalFilespec(l:exfilePattern)
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
-	if empty(l:resolvedFilespecs) && filereadable(l:filePattern)
-	    " The globbing yielded no files; however, the file pattern itself
-	    " represents an existing file. This happens if a file is passed that
-	    " matches one of the 'wildignore' patterns. In this case, as the
-	    " file has been explicitly passed to us, we include it. 
+	if empty(l:resolvedFilespecs) && (filereadable(l:filePattern) || s:ContainsNoPattern(l:filePattern))
+	    " The globbing yielded no files; however:
+	    " a) The file pattern itself represents an existing file. This
+	    "    happens if a file is passed that matches one of the
+	    "    'wildignore' patterns. In this case, as the file has been
+	    "    explicitly passed to us, we include it. 
+	    " b) The file contains no file-pattern and represents a
+	    "    to-be-created file. 
 	    let l:exfilespecs += [l:exfilePattern]
 	else
 	    " We include whatever the globbing returned, converted to ex syntax.
