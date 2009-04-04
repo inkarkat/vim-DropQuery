@@ -42,7 +42,7 @@
 "				match. 
 "				Working around the fact that glob() hides
 "				'wildignore'd files by using filereadable(). 
-"				ENH: Correctly handling file-patterns (e.g.
+"				ENH: Correctly handling file patterns (e.g.
 "				*.txt) now. 
 "	027	28-Jun-2008	Added Windows detection via has('win64'). 
 "	026	23-Feb-2008	Replaced s:IsEmptyEditor() with
@@ -239,7 +239,7 @@ function! s:EscapeNormalFilespecForBufCommand( filespec )
 "* PURPOSE:
 "   Escape a normal filespec syntax so that it can be used for the bufname(),
 "   bufnr(), bufwinnr(), ... commands. 
-"   The filespec must be anchored to ^ and $, and special file-pattern
+"   The filespec must be anchored to ^ and $, and special file pattern
 "   characters must be escaped. The special filenames '#' and '%' need not be
 "   escaped when they are anchored or occur within a longer filespec. 
 "* ASSUMPTIONS / PRECONDITIONS:
@@ -537,7 +537,7 @@ function! s:Drop( exfilePatternsString )
     let l:exfilespecs = s:ResolveExfilePatterns( l:exfilePatterns )
 "****D echomsg '****' string(l:exfilespecs)
     if empty(l:exfilespecs)
-	call s:WarningMsg('The file-pattern ''' . a:exfilePatternsString . ''' resulted in no matches. ')
+	call s:WarningMsg('The file pattern ''' . a:exfilePatternsString . ''' resulted in no matches. ')
 	return
     elseif len(l:exfilespecs) == 1
 	call s:DropSingleFile(l:exfilespecs[0])
@@ -578,7 +578,7 @@ function! s:Drop( exfilePatternsString )
 endfunction
 
 "-- commands ------------------------------------------------------------------
-" The file-pattern passed to :drop should conform to ex syntax, just as the
+" The file pattern passed to :drop should conform to ex syntax, just as the
 " built-in :drop command would expect them:
 " - spaces, [%#] are escaped with '\'
 " - path delimiters are forward slashes; backslashes are only used for
@@ -589,7 +589,7 @@ endfunction
 " command supports more, though. To work around this limitation, everything is
 " passed to the s:Drop() function as one string by using <q-args> instead of
 " <f-args>; the function itself will split that into file patterns. Splitting is
-" done on (unescaped) spaces, as the file-patterns to :drop are not enclosed by
+" done on (unescaped) spaces, as the file patterns to :drop are not enclosed by
 " double quotes, but contain escaped spaces. 
 " We do specify multiple arguments, so that file completion works for all
 " arguments. 
