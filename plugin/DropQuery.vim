@@ -16,6 +16,9 @@
 "				to-be-created) files any more. Fixed by not
 "				categorically excluding non-existing files, only
 "				if they represent a file pattern. 
+"				ENH: Improved query text with a note about
+"				the number of patterns that didn't yield file(s)
+"				and the number of files that do not yet exist. 
 "	032	11-Feb-2009	Factored out s:WarningMsg(). 
 "				BF: Now catching VIM errors in s:Drop() and
 "				s:DropSingleFile(); these may happened e.g. when
@@ -389,7 +392,27 @@ function! s:ExecuteWithoutWildignore( excommand, exfilespecs )
     endtry
 endfunction
 
-function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
+function! s:BuildQueryText( exfilespecs, statistics )
+    if a:statistics.files > 1
+	let l:fileCharacterization = 'files'
+    else
+	let l:fileCharacterization = s:ConvertExfilespecToNormalFilespec(a:exfilespecs[0])
+    endif
+    if a:statistics.nonexisting == a:statistics.files
+	let l:fileCharacterization = 'non-existing ' . l:fileCharacterization
+    elseif a:statistics.nonexisting > 0
+	let l:fileCharacterization .= printf(' (%d non-existing)', a:statistics.nonexisting)
+    endif
+
+    let l:fileNotes = (a:statistics.removed > 0 ? printf("%d file pattern%s resulted in no matches.\n", a:statistics.removed, (a:statistics.removed == 1 ? '' : 's')) : '')
+
+    if a:statistics.files > 1
+	return printf('%sAction for %d dropped %s?', l:fileNotes, a:statistics.files, l:fileCharacterization)
+    else
+	return printf('%sAction for %s?', l:fileNotes, l:fileCharacterization)
+    endif
+endfunction
+function! s:QueryActionNrForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
     " The :edit command can be used to both edit an existing file and create a
@@ -398,13 +421,13 @@ function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
     " file does not exist. This way, the user can cancel the dropping if he
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
-    let l:editAction = empty( filereadable( a:filespec ) ) ? '&create' : '&edit'
+    let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:actions = l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM"
     if a:isOpenInAnotherTabPage
 	let l:actions = "&goto tab\n" . l:actions
     endif
 
-    let l:dropActionNr = confirm( 'Action for file ' . a:filespec . ' ?', l:actions, 1, 'Question' )
+    let l:dropActionNr = confirm(a:querytext, l:actions, 1, 'Question')
 
     call s:RestoreGuiOptions( l:savedGuiOptions )
 
@@ -420,20 +443,11 @@ function! s:QueryActionNrForSingleFile( filespec, isOpenInAnotherTabPage )
 
     return l:dropActionNr
 endfunction
-function! s:QueryActionNrForMultipleFiles( statistics )
-    let l:fileCharacterization = 'files'
-    if a:statistics.nonexisting == a:statistics.files
-	let l:fileCharacterization = 'non-existing ' . l:fileCharacterization
-    elseif a:statistics.nonexisting > 0
-	let l:fileCharacterization .= printf(' (%d non-existing)', a:statistics.nonexisting)
-    endif
-    let l:fileNotes = (a:statistics.removed > 0 ? printf("%d file pattern%s resulted in no matches.\n", a:statistics.removed, (a:statistics.removed == 1 ? '' : 's')) : '')
-    let l:query = printf('%sAction for %d dropped %s?', l:fileNotes, a:statistics.files, l:fileCharacterization)
-
+function! s:QueryActionNrForMultipleFiles( querytext )
     let l:savedGuiOptions = s:SaveGuiOptions()
 
     while 1
-	let l:dropActionNr = confirm( l:query, "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question' )
+	let l:dropActionNr = confirm(a:querytext, "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question')
 	if l:dropActionNr == 7
 	    tabnew
 	else
@@ -445,7 +459,7 @@ function! s:QueryActionNrForMultipleFiles( statistics )
     return l:dropActionNr
 endfunction
 
-function! s:DropSingleFile( exfilespec )
+function! s:DropSingleFile( exfilespec, querytext )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file. 
@@ -454,7 +468,8 @@ function! s:DropSingleFile( exfilespec )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:exfilespec filespec of the dropped file. 
+"   a:exfilespec    filespec of the dropped file. 
+"   a:querytext	    text to be presented to the user. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
@@ -467,7 +482,8 @@ function! s:DropSingleFile( exfilespec )
 	let l:dropActionNr = 100
     else
 	let l:tabPageNr = s:GetTabPageNr(l:filespec)
-	let l:dropActionNr = s:QueryActionNrForSingleFile( l:filespec, (l:tabPageNr != -1) )
+	let l:isNonexisting = empty(filereadable(l:filespec))
+	let l:dropActionNr = s:QueryActionNrForSingleFile( a:querytext, isNonexisting, (l:tabPageNr != -1) )
     endif
 
     try
@@ -577,11 +593,11 @@ function! s:Drop( exfilePatternsString )
 	call s:WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:exfilePatternsString))
 	return
     elseif l:statistics.files == 1
-	call s:DropSingleFile(l:exfilespecs[0])
+	call s:DropSingleFile(l:exfilespecs[0], s:BuildQueryText(l:exfilespecs, l:statistics))
 	return
     endif
 
-    let l:dropActionNr = s:QueryActionNrForMultipleFiles(l:statistics)
+    let l:dropActionNr = s:QueryActionNrForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
 
     try
 	if l:dropActionNr <= 0
