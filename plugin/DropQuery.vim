@@ -3,7 +3,7 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " DEPENDENCIES:
-"   - Requires VIM 7.0 or higher. 
+"   - Requires Vim 7.0 or higher. 
 "
 " LIMITATIONS:
 "
@@ -12,6 +12,9 @@
 "   - Use new shellescape() function?
 "
 " REVISION	DATE		REMARKS 
+"	034	14-May-2009	Now using identifiers for l:dropAction via
+"				s:Query() instead of an index into the choices
+"				l:dropActionNr. 
 "	033	05-Apr-2009	BF: Could not drop non-existing (i.e.
 "				to-be-created) files any more. Fixed by not
 "				categorically excluding non-existing files, only
@@ -143,7 +146,7 @@
 "				activate the corresponding window. 
 "	0.01	23-May-2005	file creation
 
-" Avoid installing twice or when in compatible mode
+" Avoid installing twice or when in unsupported Vim version. 
 if exists('g:loaded_dropquery') || (v:version < 700)
     finish
 endif
@@ -338,6 +341,38 @@ function! s:RestoreGuiOptions( savedGuiOptions )
 	let &guioptions = a:savedGuiOptions
     endif
 endfunction
+function! s:Query( msg, choices, default )
+"*******************************************************************************
+"* PURPOSE:
+"   Ask the user for a choice. This is a wrapper around confirm() which allows
+"   to specify and return choices by name, not by index. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"   None. 
+"* EFFECTS / POSTCONDITIONS:
+"   None. 
+"* INPUTS:
+"   a:msg	Dialog text. 
+"   a:choices	List of choices. Set the shortcut key by prepending '&'. 
+"   a:default	Default choice text. Either number (0 for no default, (index +
+"		1) for choice) or choice text; omit any shortcut key '&' there. 
+"* RETURN VALUES: 
+"   Choice text without the shortcut key '&'. Empty string if the dialog was
+"   aborted. 
+"*******************************************************************************
+    let l:savedGuiOptions = s:SaveGuiOptions()
+
+    let l:plainChoices = map(copy(a:choices), 'substitute(v:val, "&", "", "g")')
+    let l:defaultIndex = (type(a:default) == type(0) ? a:default : max([index(l:plainChoices, a:default) + 1, 0]))
+    let l:choice = ''
+    let l:index = confirm(a:msg, join(a:choices, "\n"), l:defaultIndex, 'Question')
+    if l:index > 0
+	let l:choice = get(l:plainChoices, l:index - 1, '')
+    endif
+
+    call s:RestoreGuiOptions( l:savedGuiOptions )
+    
+    return l:choice
+endfunction
 
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, isQuoteFilespec, exfilespecs )
 "*******************************************************************************
@@ -412,9 +447,7 @@ function! s:BuildQueryText( exfilespecs, statistics )
 	return printf('%sAction for %s?', l:fileNotes, l:fileCharacterization)
     endif
 endfunction
-function! s:QueryActionNrForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage )
-    let l:savedGuiOptions = s:SaveGuiOptions()
-
+function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage )
     " The :edit command can be used to both edit an existing file and create a
     " new file. We'd like to distinguish between the two in the query, however. 
     " The changed action label "Create" offers a subtle hint that the dropped
@@ -422,41 +455,27 @@ function! s:QueryActionNrForSingleFile( querytext, isNonexisting, isOpenInAnothe
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = l:editAction . "\n&split\n&vsplit\n&preview\n&argedit\narga&dd\n&only\nnew &tab\n&new GVIM"
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM']
     if a:isOpenInAnotherTabPage
-	let l:actions = "&goto tab\n" . l:actions
+	call insert(l:actions, '&goto tab')
     endif
 
-    let l:dropActionNr = confirm(a:querytext, l:actions, 1, 'Question')
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
 
-    call s:RestoreGuiOptions( l:savedGuiOptions )
-
-    " Resort action numbers, considering that "goto tab" (#10) went to #1 in the
-    " list. 
-    if a:isOpenInAnotherTabPage
-	if l:dropActionNr == 1
-	    let l:dropActionNr = 10
-	elseif l:dropActionNr > 1
-	    let l:dropActionNr -= 1
-	endif
-    endif
-
-    return l:dropActionNr
+    return l:dropAction
 endfunction
-function! s:QueryActionNrForMultipleFiles( querytext )
-    let l:savedGuiOptions = s:SaveGuiOptions()
-
+function! s:QueryActionForMultipleFiles( querytext )
+    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'new &tab', '&new GVIM', '&open new tab and ask again']
     while 1
-	let l:dropActionNr = confirm(a:querytext, "arga&dd\n&argedit\n&split\n&vsplit\nnew &tab\n&new GVIM\n&open new tab and ask again", 1, 'Question')
-	if l:dropActionNr == 7
+	let l:dropAction = s:Query(a:querytext, l:actions, 1)
+	if l:dropAction ==# 'open new tab and ask again'
 	    tabnew
 	else
 	    break
 	endif
     endwhile
 
-    call s:RestoreGuiOptions( l:savedGuiOptions )
-    return l:dropActionNr
+    return l:dropAction
 endfunction
 
 function! s:DropSingleFile( exfilespec, querytext )
@@ -477,57 +496,56 @@ function! s:DropSingleFile( exfilespec, querytext )
     let l:filespec = s:ConvertExfilespecToNormalFilespec(a:exfilespec)
 
     if s:IsEmptyTabPage()
-	let l:dropActionNr = 1
+	let l:dropAction = 'edit'
     elseif s:IsVisibleWindow(l:filespec)
-	let l:dropActionNr = 100
+	let l:dropAction = 'goto'
     else
 	let l:tabPageNr = s:GetTabPageNr(l:filespec)
 	let l:isNonexisting = empty(filereadable(l:filespec))
-	let l:dropActionNr = s:QueryActionNrForSingleFile( a:querytext, isNonexisting, (l:tabPageNr != -1) )
+	let l:dropAction = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1))
     endif
 
     try
-	" BF: HP-UX GVIM 6.3 confirm() returns -1 instead of 0 when dialog is aborted. 
-	if l:dropActionNr <= 0
+	if empty(l:dropAction)
 	    call s:WarningMsg('Canceled opening of file ' . l:filespec)
 	    return
-	elseif l:dropActionNr == 1
+	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm edit' . ' ' . a:exfilespec
-	elseif l:dropActionNr == 2
+	elseif l:dropAction ==# 'split'
 	    execute 'belowright split' . ' ' . a:exfilespec
-	elseif l:dropActionNr == 3
+	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright vsplit' . ' ' . a:exfilespec
-	elseif l:dropActionNr == 4
+	elseif l:dropAction ==# 'preview'
 	    execute 'confirm pedit' . ' ' . a:exfilespec
-	elseif l:dropActionNr == 5
+	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' . ' ' . a:exfilespec
 	    args
-	elseif l:dropActionNr == 6
+	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
 	    args
-	elseif l:dropActionNr == 7
+	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    "execute 'drop' . ' ' . a:exfilespec . '|only'
 	    execute 'split' . ' ' . a:exfilespec . '|only'
-	elseif l:dropActionNr == 8
+	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' . ' '. a:exfilespec
-	elseif l:dropActionNr == 9
+	elseif l:dropAction ==# 'new GVIM'
 	    execute s:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), s:exCommandForExternalGvim) . '"'
-	elseif l:dropActionNr == 10
+	elseif l:dropAction ==# 'goto tab'
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
 	    " argument list. 
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' . ' '. l:tabPageNr
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
-	elseif l:dropActionNr == 100
+	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
 	    "execute "drop" . " " . a:exfilespec
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
 	else
-	    throw 'Invalid dropActionNr!'
+	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
     catch /^Vim\%((\a\+)\)\=:E/
 	echohl ErrorMsg
@@ -597,28 +615,28 @@ function! s:Drop( exfilePatternsString )
 	return
     endif
 
-    let l:dropActionNr = s:QueryActionNrForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
+    let l:dropAction = s:QueryActionForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
 
     try
-	if l:dropActionNr <= 0
+	if empty(l:dropAction)
 	    call s:WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
 	    return
-	elseif l:dropActionNr == 1
+	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
 	    args
-	elseif l:dropActionNr == 2
+	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args', l:exfilespecs)
 	    args
-	elseif l:dropActionNr == 3
+	elseif l:dropAction ==# 'split'
 	    call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-	elseif l:dropActionNr == 4
+	elseif l:dropAction ==# 'vsplit'
 	    call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-	elseif l:dropActionNr == 5
+	elseif l:dropAction ==# 'new tab'
 	    call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
-	elseif l:dropActionNr == 6
+	elseif l:dropAction ==# 'new GVIM'
 	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:exfilespecs )
 	else
-	    throw 'Invalid dropActionNr!'
+	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
     catch /^Vim\%((\a\+)\)\=:E/
 	echohl ErrorMsg
