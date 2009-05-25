@@ -15,6 +15,9 @@
 "	034	14-May-2009	Now using identifiers for l:dropAction via
 "				s:Query() instead of an index into the choices
 "				l:dropActionNr. 
+"				Added choice "readonly and ask again". 
+"				Choices "... and ask again" are removed from the
+"				list of choices when asking again. 
 "	033	05-Apr-2009	BF: Could not drop non-existing (i.e.
 "				to-be-created) files any more. Fixed by not
 "				categorically excluding non-existing files, only
@@ -448,6 +451,8 @@ function! s:BuildQueryText( exfilespecs, statistics )
     endif
 endfunction
 function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage )
+    let l:dropAttributes = {'readonly': 0}
+
     " The :edit command can be used to both edit an existing file and create a
     " new file. We'd like to distinguish between the two in the query, however. 
     " The changed action label "Create" offers a subtle hint that the dropped
@@ -455,27 +460,40 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM']
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM', '&readonly and ask again']
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
     endif
 
-    let l:dropAction = s:Query(a:querytext, l:actions, 1)
-
-    return l:dropAction
-endfunction
-function! s:QueryActionForMultipleFiles( querytext )
-    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'new &tab', '&new GVIM', '&open new tab and ask again']
     while 1
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
-	if l:dropAction ==# 'open new tab and ask again'
-	    tabnew
+	if l:dropAction ==# 'readonly and ask again'
+	    let l:dropAttributes.readonly = 1
+	    call filter(l:actions, 'v:val !~# "readonly"')
 	else
 	    break
 	endif
     endwhile
 
-    return l:dropAction
+    return [l:dropAction, l:dropAttributes]
+endfunction
+function! s:QueryActionForMultipleFiles( querytext )
+    let l:dropAttributes = {'readonly': 0}
+    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    while 1
+	let l:dropAction = s:Query(a:querytext, l:actions, 1)
+	if l:dropAction ==# 'open new tab and ask again'
+	    tabnew
+	    call filter(l:actions, 'v:val !~# "open new tab"')
+	elseif l:dropAction ==# 'readonly and ask again'
+	    let l:dropAttributes.readonly = 1
+	    call filter(l:actions, 'v:val !~# "readonly"')
+	else
+	    break
+	endif
+    endwhile
+
+    return [l:dropAction, l:dropAttributes]
 endfunction
 
 function! s:DropSingleFile( exfilespec, querytext )
@@ -494,6 +512,7 @@ function! s:DropSingleFile( exfilespec, querytext )
 "*******************************************************************************
 "****D echo '**** Dropped filespec is "' . a:exfilespec . '". '
     let l:filespec = s:ConvertExfilespecToNormalFilespec(a:exfilespec)
+    let l:dropAttributes = {'readonly': 0}
 
     if s:IsEmptyTabPage()
 	let l:dropAction = 'edit'
@@ -502,7 +521,7 @@ function! s:DropSingleFile( exfilespec, querytext )
     else
 	let l:tabPageNr = s:GetTabPageNr(l:filespec)
 	let l:isNonexisting = empty(filereadable(l:filespec))
-	let l:dropAction = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1))
     endif
 
     try
@@ -510,27 +529,33 @@ function! s:DropSingleFile( exfilespec, querytext )
 	    call s:WarningMsg('Canceled opening of file ' . l:filespec)
 	    return
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
-	    execute 'confirm edit' . ' ' . a:exfilespec
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:exfilespec
 	elseif l:dropAction ==# 'split'
-	    execute 'belowright split' . ' ' . a:exfilespec
+	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:exfilespec
 	elseif l:dropAction ==# 'vsplit'
-	    execute 'belowright vsplit' . ' ' . a:exfilespec
+	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:exfilespec
 	elseif l:dropAction ==# 'preview'
-	    execute 'confirm pedit' . ' ' . a:exfilespec
+	    execute 'confirm pedit' a:exfilespec
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'argedit'
-	    execute 'confirm argedit' . ' ' . a:exfilespec
+	    execute 'confirm argedit' a:exfilespec
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	    args
 	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
+	    " :argadd just modifies the argument list; l:dropAttributes.readonly
+	    " doesn't apply here. 
 	    args
 	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	    "execute 'drop' . ' ' . a:exfilespec . '|only'
-	    execute 'split' . ' ' . a:exfilespec . '|only'
+	    "execute 'drop' a:exfilespec . '|only'
+	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:exfilespec . '|only'
 	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' . ' '. a:exfilespec
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'new GVIM'
-	    execute s:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), s:exCommandForExternalGvim) . '"'
+	    let l:exCommandForExternalGvim = s:exCommandForExternalGvim . (l:dropAttributes.readonly ? ' -R' : '')
+	    execute l:exCommandForExternalGvim . ' "'. s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), l:exCommandForExternalGvim) . '"'
 	elseif l:dropAction ==# 'goto tab'
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
@@ -538,12 +563,14 @@ function! s:DropSingleFile( exfilespec, querytext )
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' . ' '. l:tabPageNr
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
 	    "execute "drop" . " " . a:exfilespec
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -615,7 +642,7 @@ function! s:Drop( exfilePatternsString )
 	return
     endif
 
-    let l:dropAction = s:QueryActionForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
+    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
 
     try
 	if empty(l:dropAction)
@@ -623,18 +650,21 @@ function! s:Drop( exfilePatternsString )
 	    return
 	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
+	    " :argadd just modifies the argument list; l:dropAttributes.readonly
+	    " doesn't apply here. 
 	    args
 	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args', l:exfilespecs)
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	    args
 	elseif l:dropAction ==# 'split'
-	    call s:ExecuteForEachFile( 'belowright split', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	    call s:ExecuteForEachFile( 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split'), (s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') : ''), 0, l:exfilespecs )
 	elseif l:dropAction ==# 'vsplit'
-	    call s:ExecuteForEachFile( 'belowright vsplit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	    call s:ExecuteForEachFile( 'belowright ' . (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit'), (s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') : ''), 0, l:exfilespecs )
 	elseif l:dropAction ==# 'new tab'
-	    call s:ExecuteForEachFile( 'tabedit', (s:IsEmptyTabPage() ? 'edit' : ''), 0, l:exfilespecs )
+	    call s:ExecuteForEachFile( 'tabedit' . (l:dropAttributes.readonly ? ' +setlocal readonly' : ''), (s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') : ''), 0, l:exfilespecs )
 	elseif l:dropAction ==# 'new GVIM'
-	    call s:ExecuteForEachFile( s:exCommandForExternalGvim, '', 1, l:exfilespecs )
+	    call s:ExecuteForEachFile( s:exCommandForExternalGvim . (l:dropAttributes.readonly ? ' -R' : ''), '', 1, l:exfilespecs )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
