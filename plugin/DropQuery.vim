@@ -4,11 +4,7 @@
 "
 " DEPENDENCIES:
 "   - Requires Vim 7.0 or higher. 
-"
-" LIMITATIONS:
-"
-" TODO:
-"   - Use new shellescape() function?
+"   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
@@ -22,6 +18,11 @@
 "				BF: Removed :args after :argedit, it clashed
 "				with the "edit file" message and caused the
 "				hit-enter prompt. 
+"				Replaced s:ConvertExfilespecToNormalFilespec(),
+"				s:EscapeExfilespecForExCommand(),
+"				s:EscapeNormalFilespecForExCommand(),
+"				s:EscapeNormalFilespecForBufCommand() with
+"				functions from escapings.vim library. 
 "	034	14-May-2009	Now using identifiers for l:dropAction via
 "				s:Query() instead of an index into the choices
 "				l:dropActionNr. 
@@ -191,88 +192,8 @@ function! s:WarningMsg( text )
     echohl None
 endfunction
 
-function! s:ConvertExfilespecToNormalFilespec( exfilespec )
-"*******************************************************************************
-"* PURPOSE:
-"   Converts the passed a:exfilespec to the normal filespec syntax (i.e. no
-"   escaping of [%#], possibly backslashes as path separator). The normal syntax
-"   is required by VIM functions such as bufwinnr(), because they do not
-"   understand the escaping of [%#] for ex commands. 
-"   Note: On Windows, fnamemodify() doesn't convert path separators to
-"   backslashes. We don't do that neither, as forward slashes work just as well
-"   and there is less potential for problems. 
-"* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
-"* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
-"* INPUTS:
-"	? Explanation of each argument that isn't obvious.
-"* RETURN VALUES: 
-"	? Explanation of the value returned.
-"*******************************************************************************
-    "return fnamemodify( substitute( a:exfilespec, '\\\([ \\%#]\)', '\1', 'g'), ':p' )
-    return fnamemodify( a:exfilespec, ':gs+\\\([ \\%#]\)+\1+:p' )
-endfunction
-function! s:EscapeExfilespecForExCommand( exfilespec, excommand)
-"*******************************************************************************
-"* PURPOSE:
-"   Escaped a filespec in ex syntax so that it can also be safely used in the 
-"   ':! command "filespec"' ex command. 
-"   For ex commands, [%#] must be escaped; for the ':!' ex command, the [!]
-"   character must be escaped, too, because it stands for the previously
-"   executed :! command. 
-"* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
-"* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
-"* INPUTS:
-"   a:filespec	    normal filespec
-"   a:excommand	    ex command for which a:filespec should be escaped. Can be
-"		    empty, which signifies any vanilla ex command. There's only
-"		    a special case for the :! command. 
-"* RETURN VALUES: 
-"   Filespec in ex syntax that can be passed to any ex command. 
-"*******************************************************************************
-    let l:isBangCommand = (a:excommand =~# '^\s*\%(silent\s\+\)\?!')
-    return (l:isBangCommand ? escape(a:exfilespec, '!') : a:exfilespec)
-endfunction
-function! s:EscapeNormalFilespecForExCommand( filespec )
-"*******************************************************************************
-"* PURPOSE:
-"   Escape a normal filespec syntax so that it can be used in ex commands. 
-"* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
-"* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
-"* INPUTS:
-"   a:filespec	    normal filespec
-"* RETURN VALUES: 
-"	? Explanation of the value returned.
-"*******************************************************************************
-    return escape( tr( a:filespec, '\', '/' ), ' \%#' )
-endfunction
-function! s:EscapeNormalFilespecForBufCommand( filespec )
-"*******************************************************************************
-"* PURPOSE:
-"   Escape a normal filespec syntax so that it can be used for the bufname(),
-"   bufnr(), bufwinnr(), ... commands. 
-"   The filespec must be anchored to ^ and $, and special file pattern
-"   characters must be escaped. The special filenames '#' and '%' need not be
-"   escaped when they are anchored or occur within a longer filespec. 
-"* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
-"* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
-"* INPUTS:
-"	? Explanation of each argument that isn't obvious.
-"* RETURN VALUES: 
-"	? Explanation of the value returned.
-"*******************************************************************************
-    return '^' . escape(a:filespec, '*?,{}[]\') . '$'
-endfunction
-
 function! s:IsVisibleWindow( filespec )
-    let l:winNr = bufwinnr( s:EscapeNormalFilespecForBufCommand(a:filespec) )
+    let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
     return l:winNr != -1
 endfunction
 function! s:IsEmptyTabPage()
@@ -304,7 +225,7 @@ function! s:GetTabPageNr( filespec )
 	return -1   " There's only one tab. 
     endif
 
-    let l:targetBufNr = bufnr( s:EscapeNormalFilespecForBufCommand(a:filespec) )
+    let l:targetBufNr = bufnr(escapings#bufnameescape(a:filespec))
     if l:targetBufNr == -1
 	return -1   " There's no such buffer. 
     endif
@@ -400,8 +321,7 @@ function! s:ExternalGvimForEachFile( vimArguments, fileOptionsAndCommands, exfil
     let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
 
     for l:exfilespec in a:exfilespecs
-	let l:exfilespec = '"' . l:exfilespec . '"'
-	execute l:exCommandForExternalGvim . ' ' . s:EscapeExfilespecForExCommand(l:exfilespec, l:excommand)
+	execute l:exCommandForExternalGvim escapings#shellescape(l:exfilespec, 1)
     endfor
 	    " let l:exCommandForExternalGvim = s:exCommandForExternalGvim . (l:dropAttributes.readonly ? ' -R' : '')
 	    " let l:fileOptionsAndCommandsForExCommand = (empty(a:fileOptionsAndCommands) ? '' : s:EscapeExfilespecForExCommand(a:fileOptionsAndCommands, l:exCommandForExternalGvim) . ' ')
@@ -426,7 +346,7 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, exfilespecs )
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:exfilespec in a:exfilespecs
-	execute l:excommand s:EscapeExfilespecForExCommand(l:exfilespec, l:excommand)
+	execute l:excommand l:exfilespec
 	let l:excommand = a:excommand
     endfor
 endfunction
@@ -460,7 +380,7 @@ function! s:BuildQueryText( exfilespecs, statistics )
     if a:statistics.files > 1
 	let l:fileCharacterization = 'files'
     else
-	let l:fileCharacterization = s:ConvertExfilespecToNormalFilespec(a:exfilespecs[0])
+	let l:fileCharacterization = escapings#fnameunescape(a:exfilespecs[0], 1)
     endif
     if a:statistics.nonexisting == a:statistics.files
 	let l:fileCharacterization = 'non-existing ' . l:fileCharacterization
@@ -578,7 +498,7 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 "   none
 "*******************************************************************************
 "****D echo '**** Dropped filespec is "' . a:exfilespec . '". '
-    let l:filespec = s:ConvertExfilespecToNormalFilespec(a:exfilespec)
+    let l:filespec = escapings#fnameunescape(a:exfilespec, 1)
     let l:dropAttributes = {'readonly': 0}
 
     if s:IsEmptyTabPage()
@@ -642,14 +562,14 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    " argument list. 
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' l:tabPageNr
-	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	    execute bufwinnr(escapings#bufnameescape(l:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
 	    "execute 'drop' a:fileOptionsAndCommands a:exfilespec
-	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
+	    execute bufwinnr(escapings#bufnameescape(l:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
@@ -675,7 +595,7 @@ function! s:ResolveExfilePatterns( exfilePatterns )
     let l:statistics = { 'files': 0, 'removed': 0, 'nonexisting': 0 }
     let l:exfilespecs = []
     for l:exfilePattern in a:exfilePatterns
-	let l:filePattern = s:ConvertExfilespecToNormalFilespec(l:exfilePattern)
+	let l:filePattern = escapings#fnameunescape(l:exfilePattern, 1)
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
 	if empty(l:resolvedFilespecs)
 	    " The globbing yielded no files; however:
@@ -698,7 +618,7 @@ function! s:ResolveExfilePatterns( exfilePatterns )
 	else
 	    " We include whatever the globbing returned, converted to ex syntax.
 	    " 'wildignore' patterns are filtered out. 
-	    let l:exfilespecs += map(copy(l:resolvedFilespecs), 's:EscapeNormalFilespecForExCommand(v:val)')
+	    let l:exfilespecs += map(copy(l:resolvedFilespecs), 'escapings#fnameescape(v:val)')
 	endif
     endfor
 
