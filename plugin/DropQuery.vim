@@ -14,6 +14,14 @@
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
+"				BF: The original buffer was modified as
+"				read-only if a read-only drop was canceled
+"				through the :confirm command. Now checking
+"				whether the buffer actually changed before
+"				setting 'readonly'. 
+"				BF: Removed :args after :argedit, it clashed
+"				with the "edit file" message and caused the
+"				hit-enter prompt. 
 "	034	14-May-2009	Now using identifiers for l:dropAction via
 "				s:Query() instead of an index into the choices
 "				l:dropActionNr. 
@@ -545,6 +553,14 @@ function! s:FilterFileOptionsAndCommands( exfilePatterns )
 	return [a:exfilePatterns[l:startIdx : ], join(a:exfilePatterns[ : (l:startIdx - 1)], ' ')]
     endif
 endfunction
+function! s:PreviewBufNr()
+    for l:winnr in range(1, winnr('$'))
+	if getwinvar(l:winnr, '&previewwindow')
+	    return winbufnr(l:winnr)
+	endif
+    endfor
+    return -1
+endfunction
 function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
@@ -575,6 +591,7 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1))
     endif
 
+    let l:originalBufNr = bufnr('')
     try
 	if empty(l:dropAction)
 	    call s:WarningMsg('Canceled opening of file ' . l:filespec)
@@ -586,17 +603,29 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:fileOptionsAndCommands a:exfilespec
 	elseif l:dropAction ==# 'preview'
+	    " The :pedit command does not go to the preview window, so the check
+	    " for a change in the previewed buffer and the setting of the
+	    " attributes has to be done differently. 
+	    let l:originalPreviewBufNr = s:PreviewBufNr()
 	    execute 'confirm pedit' a:fileOptionsAndCommands a:exfilespec
-	    if l:dropAttributes.readonly | setlocal readonly | endif
+	    if l:dropAttributes.readonly
+		let l:newPreviewBufNr = s:PreviewBufNr()
+		if l:newPreviewBufNr != l:originalPreviewBufNr
+		    call setbufvar(l:newPreviewBufNr, '&readonly', 1)
+		endif
+	    endif
 	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' a:fileOptionsAndCommands a:exfilespec
-	    if l:dropAttributes.readonly | setlocal readonly | endif
-	    args
-	elseif l:dropAction ==# 'argadd'
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	elseif l:dropAction ==# 'argadd  '
 	    call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. a:fileOptionsAndCommands isn't supported,
 	    " neither. 
+
+	    " Since :argadd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, show the new
+	    " argument list as a courtesy. 
 	    args
 	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
@@ -604,7 +633,7 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands a:exfilespec . '|only'
 	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' a:fileOptionsAndCommands a:exfilespec
-	    if l:dropAttributes.readonly | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'new GVIM'
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? ' -R' : ''), a:fileOptionsAndCommandsForExCommand, [ a:exfilespec ] )
 	elseif l:dropAction ==# 'goto tab'
@@ -614,14 +643,14 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' l:tabPageNr
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
-	    if l:dropAttributes.readonly | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
 	    "execute 'drop' a:fileOptionsAndCommands a:exfilespec
 	    execute bufwinnr(s:EscapeNormalFilespecForBufCommand(l:filespec)) . 'wincmd w'
-	    if l:dropAttributes.readonly | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -708,11 +737,14 @@ function! s:Drop( exfilePatternsString )
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither. 
+
+	    " Since :argadd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, show the new
+	    " argument list as a courtesy. 
 	    args
 	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args' . l:fileOptionsAndCommands, l:exfilespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
-	    args
 	elseif l:dropAction ==# 'split'
 	    call s:ExecuteForEachFile(
 	    \	'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
