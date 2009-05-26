@@ -23,6 +23,10 @@
 "				s:EscapeNormalFilespecForExCommand(),
 "				s:EscapeNormalFilespecForBufCommand() with
 "				functions from escapings.vim library. 
+"				Not simply passing the file as an argument to
+"				GVIM any more, as it would add the file to the
+"				argument list. We're using an explicit
+"				a:openCommand instead. 
 "	034	14-May-2009	Now using identifiers for l:dropAction via
 "				s:Query() instead of an index into the choices
 "				l:dropActionNr. 
@@ -302,7 +306,7 @@ function! s:Query( msg, choices, default )
     return l:choice
 endfunction
 
-function! s:ExternalGvimForEachFile( vimArguments, fileOptionsAndCommands, exfilespecs )
+function! s:ExternalGvimForEachFile( openCommand, exfilespecs )
 "*******************************************************************************
 "* PURPOSE:
 "   Opens each filespec in a:exfilespecs in an external GVIM. 
@@ -311,21 +315,22 @@ function! s:ExternalGvimForEachFile( vimArguments, fileOptionsAndCommands, exfil
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:vimArguments	    Arguments passed to the GVIM instance. 
-"   a:fileOptionsAndCommands	String containing all optional file options and
-"				commands. 
-"   a:exfilespecs	    List of filespecs in ex syntax. 
+"   a:openCommand    Ex command used to open each file in a:exfilespecs. 
+"   a:exfilespecs    List of filespecs in ex syntax. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
     let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
 
     for l:exfilespec in a:exfilespecs
-	execute l:exCommandForExternalGvim escapings#shellescape(l:exfilespec, 1)
+	" Simply passing the file as an argument to GVIM would add the file to
+	" the argument list. We're using an explicit a:openCommand instead. 
+	" Bonus: With this, special handling of the 'readonly' attribute (-R
+	" argument) is avoided, as well as the need to
+	" escapings#fnameunescape(l:exfilespec) before
+	" escapings#shellescape()ing it again. 
+	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . l:exfilespec, 1)
     endfor
-	    " let l:exCommandForExternalGvim = s:exCommandForExternalGvim . (l:dropAttributes.readonly ? ' -R' : '')
-	    " let l:fileOptionsAndCommandsForExCommand = (empty(a:fileOptionsAndCommands) ? '' : s:EscapeExfilespecForExCommand(a:fileOptionsAndCommands, l:exCommandForExternalGvim) . ' ')
-	    " execute l:exCommandForExternalGvim . ' "'. l:fileOptionsAndCommandsForExCommand . s:EscapeExfilespecForExCommand(s:EscapeNormalFilespecForExCommand(l:filespec), l:exCommandForExternalGvim) . '"'
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, exfilespecs )
 "*******************************************************************************
@@ -346,6 +351,7 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, exfilespecs )
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:exfilespec in a:exfilespecs
+echomsg '****' l:excommand l:exfilespec
 	execute l:excommand l:exfilespec
 	let l:excommand = a:excommand
     endfor
@@ -555,7 +561,8 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    execute '999tabedit' a:fileOptionsAndCommands a:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'new GVIM'
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? ' -R' : ''), a:fileOptionsAndCommandsForExCommand, [ a:exfilespec ] )
+	    let l:fileOptionsAndCommands = (empty(a:fileOptionsAndCommands) ? '' : ' ' . a:fileOptionsAndCommands)
+	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:exfilespec ] )
 	elseif l:dropAction ==# 'goto tab'
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
@@ -679,12 +686,12 @@ function! s:Drop( exfilePatternsString )
 	    \)
 	elseif l:dropAction ==# 'new tab'
 	    call s:ExecuteForEachFile(
-	    \	'tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal readonly' : ''),
+	    \	'tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
 	    \	l:exfilespecs
 	    \)
 	elseif l:dropAction ==# 'new GVIM'
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? ' -R' : ''), l:fileOptionsAndCommands, l:exfilespecs )
+	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:exfilespecs )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
