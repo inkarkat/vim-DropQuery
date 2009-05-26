@@ -11,6 +11,9 @@
 "				single file drop if such a window exists in the
 "				current tab page (and is not the current window,
 "				anyway). 
+"				BF: Do not simply open single file in current
+"				empty tab page if the file is already open in
+"				another tab page. 
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
@@ -201,7 +204,6 @@ endfunction
 
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
-echomsg '****' l:winNr a:filespec escapings#bufnameescape(a:filespec)
     return l:winNr != -1
 endfunction
 function! s:IsBlankBuffer( bufnr )
@@ -380,7 +382,6 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:filespec in a:filespecs
-echomsg '****' l:excommand l:filespec
 	execute l:excommand escapings#fnameescape(l:filespec)
 	let l:excommand = a:excommand
     endfor
@@ -535,12 +536,12 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     let l:exfilespec = escapings#fnameescape(a:filespec)
     let l:dropAttributes = {'readonly': 0}
 
-    if s:IsEmptyTabPage()
+    let l:tabPageNr = s:GetTabPageNr(a:filespec)
+    if s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
     elseif s:IsVisibleWindow(a:filespec)
 	let l:dropAction = 'goto'
     else
-	let l:tabPageNr = s:GetTabPageNr(a:filespec)
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
