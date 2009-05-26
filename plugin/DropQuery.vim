@@ -201,6 +201,7 @@ endfunction
 
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
+echomsg '****' l:winNr a:filespec escapings#bufnameescape(a:filespec)
     return l:winNr != -1
 endfunction
 function! s:IsBlankBuffer( bufnr )
@@ -336,36 +337,34 @@ function! s:Query( msg, choices, default )
     return l:choice
 endfunction
 
-function! s:ExternalGvimForEachFile( openCommand, exfilespecs )
+function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
-"   Opens each filespec in a:exfilespecs in an external GVIM. 
+"   Opens each filespec in a:filespecs in an external GVIM. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:openCommand    Ex command used to open each file in a:exfilespecs. 
-"   a:exfilespecs    List of filespecs in ex syntax. 
+"   a:openCommand   Ex command used to open each file in a:exfilespecs. 
+"   a:filespecs	    List of filespecs. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
     let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
 
-    for l:exfilespec in a:exfilespecs
+    for l:filespec in a:filespecs
 	" Simply passing the file as an argument to GVIM would add the file to
 	" the argument list. We're using an explicit a:openCommand instead. 
 	" Bonus: With this, special handling of the 'readonly' attribute (-R
-	" argument) is avoided, as well as the need to
-	" escapings#fnameunescape(l:exfilespec) before
-	" escapings#shellescape()ing it again. 
-	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . l:exfilespec, 1)
+	" argument) is avoided. 
+	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . escapings#fnameescape(l:filespec), 1)
     endfor
 endfunction
-function! s:ExecuteForEachFile( excommand, specialFirstExcommand, exfilespecs )
+function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
-"   Executes a:excommand for each filespec in a:exfilespecs. 
+"   Executes a:excommand for each filespec in a:filespecs. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -375,21 +374,21 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, exfilespecs )
 "   a:specialFirstExcommand ex command which will be invoked for the first filespec. 
 "			    If empty, the a:excommand will be invoked for the
 "			    first filespec just like any other. 
-"   a:exfilespecs	    List of filespecs in ex syntax. 
+"   a:filespecs		    List of filespecs. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
-    for l:exfilespec in a:exfilespecs
-echomsg '****' l:excommand l:exfilespec
-	execute l:excommand l:exfilespec
+    for l:filespec in a:filespecs
+echomsg '****' l:excommand l:filespec
+	execute l:excommand escapings#fnameescape(l:filespec)
 	let l:excommand = a:excommand
     endfor
 endfunction
-function! s:ExecuteWithoutWildignore( excommand, exfilespecs )
+function! s:ExecuteWithoutWildignore( excommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
-"   Executes a:excommand with all a:exfilespecs passed as arguments while
+"   Executes a:excommand with all a:filespecs passed as arguments while
 "   'wildignore' is temporarily  disabled. This allows to introduce filespecs to
 "   the argument list (:args ..., :argadd ...) which would normally be filtered
 "   by 'wildignore'. 
@@ -398,26 +397,22 @@ function! s:ExecuteWithoutWildignore( excommand, exfilespecs )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:excommand		    ex command to be invoked
-"   a:exfilespecs	    List of filespecs in ex syntax. 
+"   a:excommand	    ex command to be invoked
+"   a:filespecs	    List of filespecs. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
     let l:save_wildignore = &wildignore
     set wildignore=
     try
-	execute a:excommand join(a:exfilespecs, ' ')
+	execute a:excommand join(map(copy(a:filespecs), 'escapings#fnameescape(v:val)'), ' ')
     finally
 	let &wildignore = l:save_wildignore
     endtry
 endfunction
 
-function! s:BuildQueryText( exfilespecs, statistics )
-    if a:statistics.files > 1
-	let l:fileCharacterization = 'files'
-    else
-	let l:fileCharacterization = escapings#fnameunescape(a:exfilespecs[0], 1)
-    endif
+function! s:BuildQueryText( filespecs, statistics )
+    let l:fileCharacterization = (a:statistics.files > 1 ? 'files' : a:filespecs[0])
     if a:statistics.nonexisting == a:statistics.files
 	let l:fileCharacterization = 'non-existing ' . l:fileCharacterization
     elseif a:statistics.nonexisting > 0
@@ -520,7 +515,7 @@ function! s:PreviewBufNr()
     endfor
     return -1
 endfunction
-function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
+function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file. 
@@ -529,45 +524,45 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:exfilespec    Filespec of the dropped file. 
+"   a:filespec	    Filespec of the dropped file. 
 "   a:querytext	    Text to be presented to the user. 
 "   a:fileOptionsAndCommands	String containing all optional file options and
 "				commands. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
-"****D echo '**** Dropped filespec is "' . a:exfilespec . '". '
-    let l:filespec = escapings#fnameunescape(a:exfilespec, 1)
+"****D echo '**** Dropped filespec is "' . a:filespec . '". '
+    let l:exfilespec = escapings#fnameescape(a:filespec)
     let l:dropAttributes = {'readonly': 0}
 
     if s:IsEmptyTabPage()
 	let l:dropAction = 'edit'
-    elseif s:IsVisibleWindow(l:filespec)
+    elseif s:IsVisibleWindow(a:filespec)
 	let l:dropAction = 'goto'
     else
-	let l:tabPageNr = s:GetTabPageNr(l:filespec)
+	let l:tabPageNr = s:GetTabPageNr(a:filespec)
 	let l:blankWindowNr = s:GetBlankWindowNr()
-	let l:isNonexisting = empty(filereadable(l:filespec))
+	let l:isNonexisting = empty(filereadable(a:filespec))
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
     let l:originalBufNr = bufnr('')
     try
 	if empty(l:dropAction)
-	    call s:WarningMsg('Canceled opening of file ' . l:filespec)
+	    call s:WarningMsg('Canceled opening of file ' . a:filespec)
 	    return
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
-	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands a:exfilespec
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'split'
-	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands a:exfilespec
+	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
-	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:fileOptionsAndCommands a:exfilespec
+	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    " The :pedit command does not go to the preview window, so the check
 	    " for a change in the previewed buffer and the setting of the
 	    " attributes has to be done differently. 
 	    let l:originalPreviewBufNr = s:PreviewBufNr()
-	    execute 'confirm pedit' a:fileOptionsAndCommands a:exfilespec
+	    execute 'confirm pedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly
 		let l:newPreviewBufNr = s:PreviewBufNr()
 		if l:newPreviewBufNr != l:originalPreviewBufNr
@@ -575,10 +570,10 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 		endif
 	    endif
 	elseif l:dropAction ==# 'argedit'
-	    execute 'confirm argedit' a:fileOptionsAndCommands a:exfilespec
+	    execute 'confirm argedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'argadd  '
-	    call s:ExecuteWithoutWildignore('999argadd', [a:exfilespec])
+	    call s:ExecuteWithoutWildignore('999argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. a:fileOptionsAndCommands isn't supported,
 	    " neither. 
@@ -589,31 +584,31 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    args
 	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
-	    "execute 'drop' a:exfilespec . '|only'
-	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands a:exfilespec . '|only'
+	    "execute 'drop' l:exfilespec . '|only'
+	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec . '|only'
 	elseif l:dropAction ==# 'new tab'
-	    execute '999tabedit' a:fileOptionsAndCommands a:exfilespec
+	    execute '999tabedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'new GVIM'
 	    let l:fileOptionsAndCommands = (empty(a:fileOptionsAndCommands) ? '' : ' ' . a:fileOptionsAndCommands)
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:exfilespec ] )
+	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
 	elseif l:dropAction ==# 'goto tab'
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
 	    " argument list. 
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' l:tabPageNr
-	    execute bufwinnr(escapings#bufnameescape(l:filespec)) . 'wincmd w'
+	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
-	    "execute 'drop' a:fileOptionsAndCommands a:exfilespec
-	    execute bufwinnr(escapings#bufnameescape(l:filespec)) . 'wincmd w'
+	    "execute 'drop' a:fileOptionsAndCommands l:exfilespec
+	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'use blank window'
-	    execute l:blankWindowNr . 'wincmd w|' . (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands a:exfilespec
+	    execute l:blankWindowNr . 'wincmd w|' . (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -635,8 +630,23 @@ function! s:ContainsNoWildcards( filePattern )
     endif
 endfunction
 function! s:ResolveExfilePatterns( exfilePatterns )
+"*******************************************************************************
+"* PURPOSE:
+"   Expand any file wildcards in a:exfilePatterns, convert to normal filespecs
+"   and assemble file statistics. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   a:exfilePatterns	Raw list of exfile patterns. 
+"* RETURN VALUES: 
+"   [l:filespecs, l:statistics]	First element is a list of the resolved
+"   filespecs (in normal, not ex syntax), second element is a dictionary
+"   containing the file statistics.    
+"*******************************************************************************
     let l:statistics = { 'files': 0, 'removed': 0, 'nonexisting': 0 }
-    let l:exfilespecs = []
+    let l:filespecs = []
     for l:exfilePattern in a:exfilePatterns
 	let l:filePattern = escapings#fnameunescape(l:exfilePattern, 1)
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
@@ -647,11 +657,11 @@ function! s:ResolveExfilePatterns( exfilePatterns )
 		"    happens if a file is passed that matches one of the
 		"    'wildignore' patterns. In this case, as the file has been
 		"    explicitly passed to us, we include it. 
-		let l:exfilespecs += [l:exfilePattern]
+		let l:filespecs += [l:filePattern]
 	    elseif s:ContainsNoWildcards(l:filePattern)
 		" b) The file pattern contains no wildcards and represents a
 		"    to-be-created file. 
-		let l:exfilespecs += [l:exfilePattern]
+		let l:filespecs += [l:filePattern]
 		let l:statistics.nonexisting += 1
 	    else
 		" Nothing matched this file pattern, or whatever matched is
@@ -659,14 +669,14 @@ function! s:ResolveExfilePatterns( exfilePatterns )
 		let l:statistics.removed += 1
 	    endif
 	else
-	    " We include whatever the globbing returned, converted to ex syntax.
-	    " 'wildignore' patterns are filtered out. 
-	    let l:exfilespecs += map(copy(l:resolvedFilespecs), 'escapings#fnameescape(v:val)')
+	    " We include whatever the globbing returned; 'wildignore' patterns
+	    " are filtered out. 
+	    let l:filespecs += l:resolvedFilespecs
 	endif
     endfor
 
-    let l:statistics.files = len(l:exfilespecs)
-    return [l:exfilespecs, l:statistics]
+    let l:statistics.files = len(l:filespecs)
+    return [l:filespecs, l:statistics]
 endfunction
 function! s:Drop( exfilePatternsString )
     let l:exfilePatterns = split( a:exfilePatternsString, '\\\@<! ')
@@ -677,18 +687,18 @@ function! s:Drop( exfilePatternsString )
     " Strip off the optional ++opt +cmd file options and commands. 
     let [l:exfilePatterns, l:fileOptionsAndCommands] = s:FilterFileOptionsAndCommands(l:exfilePatterns)
 
-    let [l:exfilespecs, l:statistics] = s:ResolveExfilePatterns(l:exfilePatterns)
+    let [l:filespecs, l:statistics] = s:ResolveExfilePatterns(l:exfilePatterns)
 "****D echomsg '****' string(l:statistics)
-"****D echomsg '****' string(l:exfilespecs)
-    if empty(l:exfilespecs)
+"****D echomsg '****' string(l:filespecs)
+    if empty(l:filespecs)
 	call s:WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:exfilePatternsString))
 	return
     elseif l:statistics.files == 1
-	call s:DropSingleFile(l:exfilespecs[0], s:BuildQueryText(l:exfilespecs, l:statistics), l:fileOptionsAndCommands)
+	call s:DropSingleFile(l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
 	return
     endif
 
-    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:exfilespecs, l:statistics))
+    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics))
 
     let l:fileOptionsAndCommands = (empty(l:fileOptionsAndCommands) ? '' : ' ' . l:fileOptionsAndCommands)
     try
@@ -696,7 +706,7 @@ function! s:Drop( exfilePatternsString )
 	    call s:WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
 	    return
 	elseif l:dropAction ==# 'argadd'
-	    call s:ExecuteWithoutWildignore('999argadd', l:exfilespecs)
+	    call s:ExecuteWithoutWildignore('999argadd', l:filespecs)
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither. 
@@ -706,28 +716,28 @@ function! s:Drop( exfilePatternsString )
 	    " argument list as a courtesy. 
 	    args
 	elseif l:dropAction ==# 'argedit'
-	    call s:ExecuteWithoutWildignore('confirm args' . l:fileOptionsAndCommands, l:exfilespecs)
+	    call s:ExecuteWithoutWildignore('confirm args' . l:fileOptionsAndCommands, l:filespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'split'
 	    call s:ExecuteForEachFile(
 	    \	'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
-	    \	l:exfilespecs
+	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'vsplit'
 	    call s:ExecuteForEachFile(
 	    \	'belowright ' . (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:fileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
-	    \	l:exfilespecs
+	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'new tab'
 	    call s:ExecuteForEachFile(
 	    \	'tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
-	    \	l:exfilespecs
+	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'new GVIM'
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:exfilespecs )
+	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:filespecs )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
