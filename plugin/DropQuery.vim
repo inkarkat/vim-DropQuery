@@ -14,6 +14,9 @@
 "				BF: Do not simply open single file in current
 "				empty tab page if the file is already open in
 "				another tab page. 
+"				Now reducing the filespec to shortest possible
+"				(:~:.) before opening file(s). This avoids ugly
+"				long buffer names when :set noautochdir.  
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
@@ -339,6 +342,9 @@ function! s:Query( msg, choices, default )
     return l:choice
 endfunction
 
+function! s:ShortenFilespec( filespec )
+    return fnamemodify(a:filespec, ':~:.')
+endfunction
 function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
@@ -360,7 +366,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 	" the argument list. We're using an explicit a:openCommand instead. 
 	" Bonus: With this, special handling of the 'readonly' attribute (-R
 	" argument) is avoided. 
-	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . escapings#fnameescape(l:filespec), 1)
+	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . escapings#fnameescape(s:ShortenFilespec(l:filespec)), 1)
     endfor
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
@@ -382,7 +388,7 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
 "*******************************************************************************
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:filespec in a:filespecs
-	execute l:excommand escapings#fnameescape(l:filespec)
+	execute l:excommand escapings#fnameescape(s:ShortenFilespec(l:filespec))
 	let l:excommand = a:excommand
     endfor
 endfunction
@@ -406,7 +412,7 @@ function! s:ExecuteWithoutWildignore( excommand, filespecs )
     let l:save_wildignore = &wildignore
     set wildignore=
     try
-	execute a:excommand join(map(copy(a:filespecs), 'escapings#fnameescape(v:val)'), ' ')
+	execute a:excommand join(map(copy(a:filespecs), 'escapings#fnameescape(s:ShortenFilespec(v:val))'), ' ')
     finally
 	let &wildignore = l:save_wildignore
     endtry
@@ -533,7 +539,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "   none
 "*******************************************************************************
 "****D echo '**** Dropped filespec is "' . a:filespec . '". '
-    let l:exfilespec = escapings#fnameescape(a:filespec)
+    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
     let l:dropAttributes = {'readonly': 0}
 
     let l:tabPageNr = s:GetTabPageNr(a:filespec)
@@ -609,7 +615,11 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
 	elseif l:dropAction ==# 'use blank window'
-	    execute l:blankWindowNr . 'wincmd w|' . (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
+	    execute l:blankWindowNr . 'wincmd w'
+	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
+	    " have changed the CWD and thus invalidated the filespec. Instead,
+	    " re-shorten the filespec. 
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
