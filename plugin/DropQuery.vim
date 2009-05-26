@@ -17,6 +17,8 @@
 "				Now reducing the filespec to shortest possible
 "				(:~:.) before opening file(s). This avoids ugly
 "				long buffer names when :set noautochdir.  
+"				ENH: Only mapping 'drop' if in and at the
+"				beginning of a command line. 
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
@@ -690,6 +692,7 @@ function! s:ResolveExfilePatterns( exfilePatterns )
     return [l:filespecs, l:statistics]
 endfunction
 function! s:Drop( exfilePatternsString )
+"****D echomsg '**** Dropped pattern is "' . a:exfilePatternsString . '". '
     let l:exfilePatterns = split( a:exfilePatternsString, '\\\@<! ')
     if empty( l:exfilePatterns )
 	throw 'Must pass at least one filespec / pattern!'
@@ -781,7 +784,7 @@ endfunction
 :command! -nargs=+ -complete=file Drop call <SID>Drop(<q-args>)
 
 if g:dropquery_RemapDrop
-    cabbrev drop Drop
+    cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos()) =~# '^\s*drop$' ? 'Drop' : 'drop')
 endif
 
 let &cpo = s:save_cpo
