@@ -7,6 +7,10 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	036	27-May-2009	ENH: Implemented "use blank window" choice for
+"				single file drop if such a window exists in the
+"				current tab page (and is not the current window,
+"				anyway). 
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
@@ -41,7 +45,7 @@
 "				the number of patterns that didn't yield file(s)
 "				and the number of files that do not yet exist. 
 "	032	11-Feb-2009	Factored out s:WarningMsg(). 
-"				BF: Now catching VIM errors in s:Drop() and
+"				BF: Now catching Vim errors in s:Drop() and
 "				s:DropSingleFile(); these may happened e.g. when
 "				the :only fails due to a modified buffer. 
 "	031	07-Jan-2009	Small BF: Using has('gui_running'). 
@@ -118,14 +122,14 @@
 "				achieve dialog focus on activation. 
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files: 
 "				Switched main filespec format from normal to ex
-"				syntax; VIM commands and user display use
+"				syntax; Vim commands and user display use
 "				s:ConvertExfilespecToNormalFilespec() to
 "				unescape the ex syntax; that was formerly done
 "				by -complete=file. 
 "				Multiple files are passed as one string
 "				(-nargs=1, and splitting is done inside the
 "				s:Drop() function. 
-"	0.21	16-Nov-2006	BF: '%' and '#' must also be escaped for VIM. 
+"	0.21	16-Nov-2006	BF: '%' and '#' must also be escaped for Vim. 
 "	0.20	15-Nov-2006	Added support for multiple files passed to
 "				:Drop, making it fully compatible with the
 "				built-in :drop command. 
@@ -137,22 +141,22 @@
 "	0.10	02-Nov-2006	Documented function arguments and the
 "				-complete=file option. 
 "				Better escaping of passed filespec. 
-"				Now requiring VIM 7.0. 
-"	0.09	26-Oct-2006	ENH: Learned from a vimtip that VIM does have a
+"				Now requiring Vim 7.0. 
+"	0.09	26-Oct-2006	ENH: Learned from a vimtip that Vim does have a
 "				built-in :sleep comand; replaced clumsy function 
 "				BideSomeTimeToLetActivationComplete(). 
 "	0.08	25-Aug-2006	I18N: Endless loop in
 "				BideSomeTimeToLetActivationComplete() on German 
 "				locale; added ',' as a decimal separator. 
-"	0.07	11-May-2006	VIM70: Added action 'new tab'. 
+"	0.07	11-May-2006	Vim 7.0: Added action 'new tab'. 
 "	0.06	10-May-2006	ENH: Added BideSomeTimeToLetActivationComplete()
-"				to avoid that VIM gets the focus after
-"				activation, but not VIM's popup dialog. 
+"				to avoid that Vim gets the focus after
+"				activation, but not Vim's popup dialog. 
 "	0.05	17-Feb-2006	BF: Avoid :drop command as it adds the dropped
 "				file to the argument list. 
 "	0.04	15-Aug-2005	Added action 'new GVIM' to launch the file in a
 "				new GVIM instance. Requires that 'gvim' is
-"				accessible through $PATH. (Action 'new VIM'
+"				accessible through $PATH. (Action 'new Vim'
 "				doesn't make much sense, because a new terminal
 "				window would be required, too.)
 "				BF: HP-UX GVIM 6.3 confirm() returns -1 instead
@@ -173,17 +177,16 @@ let g:loaded_dropquery = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
-"-- global configuration ------------------------------------------------------
+"-- configuration -------------------------------------------------------------
 if !exists('g:dropquery_RemapDrop')
     " If set, remaps the built-in ':drop' command to use ':Drop' instead. 
     " With this option, other integrations (e.g. VisVim) need not be modified to
     " use the dropquery functionality. 
     let g:dropquery_RemapDrop = 1
 endif
-
 if !exists('g:dropquery_NoPopup')
     " If set, doesn't use a pop-up dialog in GVIM for the query. Instead, a
-    " textual query (as is done in the console VIM) is used. This does not cover
+    " textual query (as is done in the console Vim) is used. This does not cover
     " the :confirm query "Save changes to...?" when abandoning modified buffers. 
     let g:dropquery_NoPopup = 0
 endif
@@ -200,15 +203,42 @@ function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
     return l:winNr != -1
 endfunction
+function! s:IsBlankBuffer( bufnr )
+    return (empty(bufname(a:bufnr)) && 
+    \ getbufvar(a:bufnr, '&modified') == 0 && 
+    \ empty(getbufvar(a:bufnr, '&buftype'))
+    \)
+endfunction
 function! s:IsEmptyTabPage()
-    let l:currentBufNr = bufnr('%')
     let l:isEmptyTabPage = ( 
-		\ empty( bufname(l:currentBufNr) ) && 
-		\ tabpagewinnr(tabpagenr(), '$') <= 1 && 
-		\ getbufvar(l:currentBufNr, '&modified') == 0 && 
-		\ empty( getbufvar(l:currentBufNr, '&buftype') )
-		\)
+    \	tabpagewinnr(tabpagenr(), '$') <= 1 && 
+    \	s:IsBlankBuffer(bufnr(''))
+    \)
     return l:isEmptyTabPage
+endfunction
+function! s:GetBlankWindowNr()
+"*******************************************************************************
+"* PURPOSE:
+"   Find a blank, unused window (i.e. containing an unnamed, unmodified normal
+"   buffer) in the current tab page and return its number. 
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   None. 
+"* RETURN VALUES: 
+"   Window number of the first blank window (preferring the current window), or
+"   -1 if no such window exists. 
+"*******************************************************************************
+    " Check all windows in the current tab page, starting (and thus preferring)
+    " the current window. 
+    for l:winnr in insert(range(1, winnr('$')), winnr())
+	if s:IsBlankBuffer(winbufnr(l:winnr))
+	    return l:winnr
+	endif
+    endfor
+    return -1
 endfunction
 function! s:GetTabPageNr( filespec )
 "*******************************************************************************
@@ -222,7 +252,7 @@ function! s:GetTabPageNr( filespec )
 "* INPUTS:
 "   a:filespec
 "* RETURN VALUES: 
-"   tab page number of the first tab page (other than the current one) where the
+"   Tab page number of the first tab page (other than the current one) where the
 "   buffer is visible; else -1. 
 "*******************************************************************************
     if tabpagenr('$') == 1
@@ -255,9 +285,9 @@ function! s:SaveGuiOptions()
     endif
 
     if ! g:dropquery_NoPopup
-	" Focus on the popup dialog requires that activation of VIM from the
+	" Focus on the popup dialog requires that activation of Vim from the
 	" external call has been completed, so better wait a few milliseconds to
-	" avoid that VIM gets focus, but not VIM's popup dialog. This occurred
+	" avoid that Vim gets focus, but not Vim's popup dialog. This occurred
 	" on Windows XP. 
 	" The sleep workaround still doesn't work all the time on Windows XP.
 	" I've empirically found out that I get better luck if foreground() is
@@ -402,7 +432,7 @@ function! s:BuildQueryText( exfilespecs, statistics )
 	return printf('%sAction for %s?', l:fileNotes, l:fileCharacterization)
     endif
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage )
+function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -413,6 +443,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM', '&readonly and ask again']
+    if a:isBlankWindow
+	call insert(l:actions, 'use &blank window')
+    endif
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
     endif
@@ -513,8 +546,9 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	let l:dropAction = 'goto'
     else
 	let l:tabPageNr = s:GetTabPageNr(l:filespec)
+	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(l:filespec))
-	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
     let l:originalBufNr = bufnr('')
@@ -578,6 +612,8 @@ function! s:DropSingleFile( exfilespec, querytext, fileOptionsAndCommands )
 	    "execute 'drop' a:fileOptionsAndCommands a:exfilespec
 	    execute bufwinnr(escapings#bufnameescape(l:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	elseif l:dropAction ==# 'use blank window'
+	    execute l:blankWindowNr . 'wincmd w|' . (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands a:exfilespec
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -708,12 +744,12 @@ endfunction
 "-- commands ------------------------------------------------------------------
 " The file pattern passed to :drop should conform to ex syntax, just as the
 " built-in :drop command would expect them:
-" - spaces, [%#] are escaped with '\'
-" - path delimiters are forward slashes; backslashes are only used for
-"   escaping. 
+" - spaces, [%#] etc. are escaped with '\'
 " - no enclosing of filespecs in double quotes
+" - It is recommended that path delimiters are forward slashes; backslashes are
+"   only used for escaping. 
 "
-" A maximum of 20 arguments can be passed to a VIM function. The built-in :drop
+" A maximum of 20 arguments can be passed to a Vim function. The built-in :drop
 " command supports more, though. To work around this limitation, everything is
 " passed to the s:Drop() function as one string by using <q-args> instead of
 " <f-args>; the function itself will split that into file patterns. Splitting is
@@ -729,3 +765,4 @@ endif
 
 let &cpo = s:save_cpo
 
+" vim: set sts=4 sw=4 noexpandtab ff=unix fdm=syntax :
