@@ -19,6 +19,8 @@
 "				long buffer names when :set noautochdir.  
 "				ENH: Only mapping 'drop' if in and at the
 "				beginning of a command line. 
+"				Unescaping of passed filespecs is not necessary;
+"				-complete=file automatically unescapes them. 
 "	035	26-May-2009	ENH: Handling ++enc=... and +cmd=...
 "				Separated s:ExternalGvimForEachFile() from
 "				s:ExecuteForEachFile(). 
@@ -485,7 +487,7 @@ function! s:QueryActionForMultipleFiles( querytext )
     return [l:dropAction, l:dropAttributes]
 endfunction
 
-function! s:FilterFileOptionsAndCommands( exfilePatterns )
+function! s:FilterFileOptionsAndCommands( filePatterns )
 "*******************************************************************************
 "* PURPOSE:
 "   Strip off the optional ++opt +cmd file options and commands. 
@@ -499,21 +501,21 @@ function! s:FilterFileOptionsAndCommands( exfilePatterns )
 "* EFFECTS / POSTCONDITIONS:
 "   None. 
 "* INPUTS:
-"   a:exfilePatterns	Raw list of exfile patterns. 
+"   a:filePatterns	Raw list of file patterns. 
 "* RETURN VALUES: 
-"   [a:exfilePatterns, fileOptionsAndCommands]	First element is the passed
+"   [a:filePatterns, fileOptionsAndCommands]	First element is the passed
 "   list, with any file options and commands removed. Second element is a string
 "   containing all removed file options and commands. 
 "*******************************************************************************
     let l:startIdx = 0
-    while a:exfilePatterns[l:startIdx] =~# '^+\{1,2}'
+    while a:filePatterns[l:startIdx] =~# '^+\{1,2}'
 	let l:startIdx += 1
     endwhile
     
     if l:startIdx == 0
-	return [a:exfilePatterns, '']
+	return [a:filePatterns, '']
     else
-	return [a:exfilePatterns[l:startIdx : ], join(a:exfilePatterns[ : (l:startIdx - 1)], ' ')]
+	return [a:filePatterns[l:startIdx : ], join(a:filePatterns[ : (l:startIdx - 1)], ' ')]
     endif
 endfunction
 function! s:PreviewBufNr()
@@ -642,17 +644,17 @@ function! s:ContainsNoWildcards( filePattern )
 	return a:filePattern !~ '\\\@<![*?{[]'
     endif
 endfunction
-function! s:ResolveExfilePatterns( exfilePatterns )
+function! s:ResolveExfilePatterns( filePatterns )
 "*******************************************************************************
 "* PURPOSE:
-"   Expand any file wildcards in a:exfilePatterns, convert to normal filespecs
+"   Expand any file wildcards in a:filePatterns, convert to normal filespecs
 "   and assemble file statistics. 
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:exfilePatterns	Raw list of exfile patterns. 
+"   a:filePatterns	Raw list of file patterns. 
 "* RETURN VALUES: 
 "   [l:filespecs, l:statistics]	First element is a list of the resolved
 "   filespecs (in normal, not ex syntax), second element is a dictionary
@@ -660,8 +662,7 @@ function! s:ResolveExfilePatterns( exfilePatterns )
 "*******************************************************************************
     let l:statistics = { 'files': 0, 'removed': 0, 'nonexisting': 0 }
     let l:filespecs = []
-    for l:exfilePattern in a:exfilePatterns
-	let l:filePattern = escapings#fnameunescape(l:exfilePattern, 1)
+    for l:filePattern in a:filePatterns
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
 	if empty(l:resolvedFilespecs)
 	    " The globbing yielded no files; however:
@@ -691,21 +692,21 @@ function! s:ResolveExfilePatterns( exfilePatterns )
     let l:statistics.files = len(l:filespecs)
     return [l:filespecs, l:statistics]
 endfunction
-function! s:Drop( exfilePatternsString )
-"****D echomsg '**** Dropped pattern is "' . a:exfilePatternsString . '". '
-    let l:exfilePatterns = split( a:exfilePatternsString, '\\\@<! ')
-    if empty( l:exfilePatterns )
+function! s:Drop( filePatternsString )
+"****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
+    let l:filePatterns = split( a:filePatternsString, '\\\@<! ')
+    if empty( l:filePatterns )
 	throw 'Must pass at least one filespec / pattern!'
     endif
 
     " Strip off the optional ++opt +cmd file options and commands. 
-    let [l:exfilePatterns, l:fileOptionsAndCommands] = s:FilterFileOptionsAndCommands(l:exfilePatterns)
+    let [l:filePatterns, l:fileOptionsAndCommands] = s:FilterFileOptionsAndCommands(l:filePatterns)
 
-    let [l:filespecs, l:statistics] = s:ResolveExfilePatterns(l:exfilePatterns)
+    let [l:filespecs, l:statistics] = s:ResolveExfilePatterns(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:filespecs)
     if empty(l:filespecs)
-	call s:WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:exfilePatternsString))
+	call s:WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
 	return
     elseif l:statistics.files == 1
 	call s:DropSingleFile(l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
@@ -780,7 +781,8 @@ endfunction
 " done on (unescaped) spaces, as the file patterns to :drop are not enclosed by
 " double quotes, but contain escaped spaces. 
 " We do specify multiple arguments, so that file completion works for all
-" arguments. 
+" arguments. With -complete=file, the arguments are also automatically unescaped
+" from exfilespec to normal filespecs. 
 :command! -nargs=+ -complete=file Drop call <SID>Drop(<q-args>)
 
 if g:dropquery_RemapDrop
