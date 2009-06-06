@@ -7,6 +7,7 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	037	06-Jun-2009	BF: Typo in 'argadd' case in s:DropSingleFile(). 
 "	036	27-May-2009	ENH: Implemented "use blank window" choice for
 "				single file drop if such a window exists in the
 "				current tab page (and is not the current window,
@@ -583,7 +584,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
-	elseif l:dropAction ==# 'argadd  '
+	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. a:fileOptionsAndCommands isn't supported,
