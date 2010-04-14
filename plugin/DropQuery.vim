@@ -7,6 +7,9 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	039	15-Apr-2010	ENH: Show only :argedit choice when there are no
+"				arguments yet; add :argadd and make it the
+"				preferred action otherwise. 
 "	038	07-Jun-2009	Added "show" choice that splits files (above,
 "				not below) read-only. 
 "				Avoid "E36: Not enough room" when trying to open
@@ -443,6 +446,14 @@ function! s:BuildQueryText( filespecs, statistics )
 	return printf('%sAction for %s?', l:fileNotes, l:fileCharacterization)
     endif
 endfunction
+function! s:QueryActionForArguments( actions )
+    if argc() > 0
+	" There already are arguments; add :argadd choice and make it the
+	" default by removing the accelerator from :argedit. 
+	call insert(a:actions, '&argadd', index(a:actions, '&argedit'))
+	let a:actions[index(a:actions, '&argedit')] = 'argedit'
+    endif
+endfunction
 function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
@@ -453,9 +464,10 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM']
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'new &tab', '&new GVIM']
+    call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
-	call insert(l:actions, 'sho&w', 3)
+	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
 	call add(l:actions, '&readonly and ask again')
     endif
     if a:isBlankWindow
@@ -479,7 +491,8 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0}
-    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    call s:QueryActionForArguments(l:actions)
 
     " Avoid "E36: Not enough room" when trying to open more splits than
     " possible. 
