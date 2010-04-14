@@ -7,6 +7,9 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	040	15-Apr-2010	ENH: Added "diff" choice both for single file
+"				(diff with current window) and multiple files
+"				(diff all those files). 
 "	039	15-Apr-2010	ENH: Show only :argedit choice when there are no
 "				arguments yet; add :argadd and make it the
 "				preferred action otherwise. 
@@ -381,7 +384,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . escapings#fnameescape(s:ShortenFilespec(l:filespec)), 1)
     endfor
 endfunction
-function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
+function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ... )
 "*******************************************************************************
 "* PURPOSE:
 "   Executes a:excommand for each filespec in a:filespecs. 
@@ -395,13 +398,19 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs )
 "			    If empty, the a:excommand will be invoked for the
 "			    first filespec just like any other. 
 "   a:filespecs		    List of filespecs. 
+"   a:afterExcommand	    Optional ex command which will be invoked after
+"			    opening the file via a:excommand. 
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
+    let l:afterExcommand = (a:0 ? a:1 : '')
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:filespec in a:filespecs
 	execute l:excommand escapings#fnameescape(s:ShortenFilespec(l:filespec))
 	let l:excommand = a:excommand
+	if ! empty(l:afterExcommand)
+	    execute l:afterExcommand
+	endif
     endfor
 endfunction
 function! s:ExecuteWithoutWildignore( excommand, filespecs )
@@ -470,6 +479,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
 	call add(l:actions, '&readonly and ask again')
     endif
+    if ! a:isNonexisting && ! a:isBlankWindow
+	call insert(l:actions, '&diff', index(l:actions, '&split'))
+    endif
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
     endif
@@ -493,6 +505,9 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0}
     let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
     call s:QueryActionForArguments(l:actions)
+    if a:fileNum <= 4
+	call insert(l:actions, '&diff', index(l:actions, '&split'))
+    endif
 
     " Avoid "E36: Not enough room" when trying to open more splits than
     " possible. 
@@ -592,6 +607,14 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    return
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'diff'
+	    " Emulate :diffsplit because it doesn't allow to open the file
+	    " read-only. 
+	    diffthis
+	    " Like :diffsplit, evaluate the 'diffopt' option to determine
+	    " whether to split horizontally or vertically. 
+	    execute 'belowright' (&diffopt =~# 'vertical' ? 'vertical' : '') (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
+	    diffthis
 	elseif l:dropAction ==# 'split'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
@@ -763,6 +786,13 @@ function! s:Drop( filePatternsString )
 	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args' . l:fileOptionsAndCommands, l:filespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
+	elseif l:dropAction ==# 'diff'
+	    call s:ExecuteForEachFile(
+	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
+	    \	l:filespecs,
+	    \	'diffthis'
+	    \)
 	elseif l:dropAction ==# 'split'
 	    call s:ExecuteForEachFile(
 	    \	'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
