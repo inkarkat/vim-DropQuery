@@ -7,6 +7,10 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	038	07-Jun-2009	Added "show" choice that splits files (above,
+"				not below) read-only. 
+"				Avoid "E36: Not enough room" when trying to open
+"				more splits than possible. 
 "	037	06-Jun-2009	BF: Typo in 'argadd' case in s:DropSingleFile(). 
 "	036	27-May-2009	ENH: Implemented "use blank window" choice for
 "				single file drop if such a window exists in the
@@ -449,7 +453,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM', '&readonly and ask again']
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', 'arga&dd', '&only', 'new &tab', '&new GVIM']
+    if ! a:isNonexisting
+	call insert(l:actions, 'sho&w', 3)
+	call add(l:actions, '&readonly and ask again')
+    endif
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
     endif
@@ -469,9 +477,15 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForMultipleFiles( querytext )
+function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0}
-    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    let l:actions = ['arga&dd', '&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+
+    " Avoid "E36: Not enough room" when trying to open more splits than
+    " possible. 
+    if a:fileNum > &lines   | call filter(l:actions, 'v:val !=# "&split" && v:val !=# "sho&w"')  | endif
+    if a:fileNum > &columns | call filter(l:actions, 'v:val !=# "&vsplit"') | endif
+
     while 1
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
 	if l:dropAction ==# 'open new tab and ask again'
@@ -569,6 +583,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:fileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'show'
+	    execute 'aboveleft sview' a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    " The :pedit command does not go to the preview window, so the check
 	    " for a change in the previewed buffer and the setting of the
@@ -714,7 +730,7 @@ function! s:Drop( filePatternsString )
 	return
     endif
 
-    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics))
+    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
 
     let l:fileOptionsAndCommands = (empty(l:fileOptionsAndCommands) ? '' : ' ' . l:fileOptionsAndCommands)
     try
@@ -745,6 +761,12 @@ function! s:Drop( filePatternsString )
 	    \	'belowright ' . (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:fileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
 	    \	l:filespecs
+	    \)
+	elseif l:dropAction ==# 'show'
+	    call s:ExecuteForEachFile(
+	    \	'aboveleft sview' . l:fileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? 'view' . l:fileOptionsAndCommands : ''),
+	    \	reverse(l:filespecs)
 	    \)
 	elseif l:dropAction ==# 'new tab'
 	    call s:ExecuteForEachFile(
