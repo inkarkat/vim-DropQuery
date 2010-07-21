@@ -8,8 +8,8 @@
 "
 " REVISION	DATE		REMARKS 
 "	040	15-Apr-2010	ENH: Added "diff" choice both for single file
-"				(diff with current window) and multiple files
-"				(diff all those files). 
+"				(diff with existing diff or current window) and
+"				multiple files (diff all those files). 
 "	039	15-Apr-2010	ENH: Show only :argedit choice when there are no
 "				arguments yet; add :argadd and make it the
 "				preferred action otherwise. 
@@ -296,6 +296,10 @@ function! s:GetTabPageNr( filespec )
 	endfor
     endfor
     return -1
+endfunction
+function! s:HasDiffWindow()
+    let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
+    return ! empty(l:diffedWinNrs)
 endfunction
 
 function! s:SaveGuiOptions()
@@ -608,9 +612,11 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'diff'
-	    " Emulate :diffsplit because it doesn't allow to open the file
-	    " read-only. 
-	    diffthis
+	    if ! s:HasDiffWindow()
+		" Emulate :diffsplit because it doesn't allow to open the file
+		" read-only. 
+		diffthis
+	    endif
 	    " Like :diffsplit, evaluate the 'diffopt' option to determine
 	    " whether to split horizontally or vertically. 
 	    execute 'belowright' (&diffopt =~# 'vertical' ? 'vertical' : '') (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
