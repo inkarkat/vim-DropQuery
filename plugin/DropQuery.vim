@@ -7,6 +7,15 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	041	22-Jul-2010	Expanded "if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif"
+"				inside s:DropSingleFile() into multiple lines to
+"				avoid the (well-known, but never before
+"				analyzed) "Error while processing ...
+"				DropSingleFile: E171: Missing :endif: catch
+"				/^Vim\%((\a\+\)\=:E/". After my analysis, this
+"				seems to be a bug in Vim 7.2 that can be
+"				prevented by splitting the if statement to
+"				multiple lines. 
 "	040	15-Apr-2010	ENH: Added "diff" choice both for single file
 "				(diff with existing diff or current window) and
 "				multiple files (diff all those files). 
@@ -641,7 +650,9 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    endif
 	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' a:fileOptionsAndCommands l:exfilespec
-	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
+		setlocal readonly
+	    endif
 	elseif l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
@@ -658,7 +669,9 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec . '|only'
 	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' a:fileOptionsAndCommands l:exfilespec
-	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
+		setlocal readonly
+	    endif
 	elseif l:dropAction ==# 'new GVIM'
 	    let l:fileOptionsAndCommands = (empty(a:fileOptionsAndCommands) ? '' : ' ' . a:fileOptionsAndCommands)
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
@@ -669,14 +682,18 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    " Instead, first go to the tab page, then activate the correct window. 
 	    execute 'tabnext' l:tabPageNr
 	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
-	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
+		setlocal readonly
+	    endif
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file. 
 	    "execute 'drop' a:fileOptionsAndCommands l:exfilespec
 	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
-	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
+		setlocal readonly
+	    endif
 	elseif l:dropAction ==# 'use blank window'
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
