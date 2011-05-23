@@ -7,6 +7,12 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	042	14-Aug-2010	BUG: s:ResolveExfilePatterns() didn't detect
+"				filespecs (e.g. "C:\Program Files\ingo\tt
+"				cache.cmd.20100814b") that match a 'wildignore'
+"				pattern and contain spaces. The
+"				backslash-escaping of spaces must be removed for
+"				filereadable() to work. 
 "	041	22-Jul-2010	Expanded "if l:dropAttributes.readonly && bufnr('') != l:originalBufNr | setlocal readonly | endif"
 "				inside s:DropSingleFile() into multiple lines to
 "				avoid the (well-known, but never before
@@ -598,7 +604,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "* RETURN VALUES: 
 "   none
 "*******************************************************************************
-"****D echo '**** Dropped filespec is "' . a:filespec . '". '
+"****D echomsg '**** Dropped filespec is "' . a:filespec . '". '
     let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
     let l:dropAttributes = {'readonly': 0}
 
@@ -741,13 +747,20 @@ function! s:ResolveExfilePatterns( filePatterns )
     for l:filePattern in a:filePatterns
 	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
 	if empty(l:resolvedFilespecs)
+	    " To treat the file pattern as a filespec, we must emulate one
+	    " effect of glob(): It removes superfluous escaping of spaces in the
+	    " filespec (but leaves other escaped characters like 'C:\\foo'
+	    " as-is). Without this substitution, the filereadable() check won't
+	    " work. 
+	    let l:normalizedPotentialFilespec = substitute(l:filePattern, '\\\@<!\\ ', ' ', 'g')
+
 	    " The globbing yielded no files; however:
-	    if filereadable(l:filePattern)
+	    if filereadable(l:normalizedPotentialFilespec)
 		" a) The file pattern itself represents an existing file. This
 		"    happens if a file is passed that matches one of the
 		"    'wildignore' patterns. In this case, as the file has been
 		"    explicitly passed to us, we include it. 
-		let l:filespecs += [l:filePattern]
+		let l:filespecs += [l:normalizedPotentialFilespec]
 	    elseif s:ContainsNoWildcards(l:filePattern)
 		" b) The file pattern contains no wildcards and represents a
 		"    to-be-created file. 
