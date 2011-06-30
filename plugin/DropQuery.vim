@@ -7,6 +7,12 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	043	24-May-2011	Change 'show' split behavior from :aboveleft to
+"				:topleft, so that the full window width is used. 
+"				Main use case is opening patch files while
+"				writing the corresponding patch email (with the
+"				email window padded so that its width is
+"				limited). 
 "	042	14-Aug-2010	BUG: s:ResolveExfilePatterns() didn't detect
 "				filespecs (e.g. "C:\Program Files\ingo\tt
 "				cache.cmd.20100814b") that match a 'wildignore'
@@ -641,7 +647,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
-	    execute 'aboveleft sview' a:fileOptionsAndCommands l:exfilespec
+	    execute 'topleft sview' a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    " The :pedit command does not go to the preview window, so the check
 	    " for a change in the previewed buffer and the setting of the
@@ -843,7 +849,7 @@ function! s:Drop( filePatternsString )
 	    \)
 	elseif l:dropAction ==# 'show'
 	    call s:ExecuteForEachFile(
-	    \	'aboveleft sview' . l:fileOptionsAndCommands,
+	    \	'topleft sview' . l:fileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? 'view' . l:fileOptionsAndCommands : ''),
 	    \	reverse(l:filespecs)
 	    \)
