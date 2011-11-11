@@ -7,6 +7,13 @@
 "   - escapings.vim autoload script. 
 "
 " REVISION	DATE		REMARKS 
+"	044	01-Jul-2011	ENH: Implement handling of +cmd=... for the
+"				single-file "goto" and "goto tab" actions by
+"				emulating what the :edit commands do internally
+"				(but therefore ++enc=... won't work). This is
+"				useful because external applications may just
+"				want to synchronize the current cursor position
+"				to Vim via "SendToGVIM +42 foo.txt". 
 "	043	24-May-2011	Change 'show' split behavior from :aboveleft to
 "				:topleft, so that the full window width is used. 
 "				Main use case is opening patch files while
@@ -594,6 +601,38 @@ function! s:PreviewBufNr()
     endfor
     return -1
 endfunction
+function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
+"******************************************************************************
+"* PURPOSE:
+"   Execute the fileOptionsAndCommands for the current buffer. This emulates
+"   what the :edit, :drop, ... commands handle themselves for the case where the
+"   buffer is already loaded in a window. 
+"
+"* ASSUMPTIONS / PRECONDITIONS:
+"   None. 
+"* EFFECTS / POSTCONDITIONS:
+"   None. 
+"* INPUTS:
+"   a:fileOptionsAndCommands	String containing all optional file options and
+"				commands; can be empty. 
+"* RETURN VALUES: 
+"   None. 
+"******************************************************************************
+    " The individual file options / commands are space-delimited, but spaces can
+    " be escaped via backslash. 
+    for l:fileOptionOrCommand in split(a:fileOptionsAndCommands, '\%(\%(^\|[^\\]\)\%(\\\\\)*\\\)\@<! ')
+	if l:fileOptionOrCommand =~# '^++\%(ff\|fileformat\)=' || l:fileOptionOrCommand =~# '^++\%(no\)\?\%(bin\|binary\)$'
+	    execute 'setlocal' . l:fileOptionOrCommand[2:]
+	elseif l:fileOptionOrCommand =~# '^++'
+	    " Cannot execute ++enc and ++bad outside of :edit; ++edit only
+	    " applies to :read. 
+	elseif l:fileOptionOrCommand =~# '^+'
+	    execute substitute(l:fileOptionOrCommand[1:], '\\\([ \\]\)', '\1', 'g')
+	else
+	    throw 'Invalid file option / command: ' . l:fileOptionOrCommand
+	endif
+    endfor
+endfunction
 function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
@@ -697,6 +736,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
+	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'goto'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    " Do not use the :drop command to activate the window which contains the
@@ -706,6 +746,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
+	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'use blank window'
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
