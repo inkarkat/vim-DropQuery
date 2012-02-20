@@ -5,8 +5,16 @@
 " DEPENDENCIES:
 "   - Requires Vim 7.0 or higher. 
 "   - escapings.vim autoload script. 
+"   - ingofileargs.vim autoload script. 
+"
+" Copyright: (C) 2005-2012 Ingo Karkat
+"   The VIM LICENSE applies to this script; see ':help copyright'. 
 "
 " REVISION	DATE		REMARKS 
+"	045	09-Feb-2012	Split off s:FilterFileOptionsAndCommands() and
+"				s:ResolveExfilePatterns() to
+"				autoload/ingofileargs.vim to allow reuse in
+"				ingocommands.vim. 
 "	044	01-Jul-2011	ENH: Implement handling of +cmd=... for the
 "				single-file "goto" and "goto tab" actions by
 "				emulating what the :edit commands do internally
@@ -562,37 +570,6 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     return [l:dropAction, l:dropAttributes]
 endfunction
 
-function! s:FilterFileOptionsAndCommands( filePatterns )
-"*******************************************************************************
-"* PURPOSE:
-"   Strip off the optional ++opt +cmd file options and commands. 
-"
-"   (In Vim 7.2,) options and commands can only appear at the beginning of the
-"   file list; there can be multiple options, but only one command. They are
-"   only applied to the first (opened) file, not to any other passed file. 
-"
-"* ASSUMPTIONS / PRECONDITIONS:
-"   None. 
-"* EFFECTS / POSTCONDITIONS:
-"   None. 
-"* INPUTS:
-"   a:filePatterns	Raw list of file patterns. 
-"* RETURN VALUES: 
-"   [a:filePatterns, fileOptionsAndCommands]	First element is the passed
-"   list, with any file options and commands removed. Second element is a string
-"   containing all removed file options and commands. 
-"*******************************************************************************
-    let l:startIdx = 0
-    while a:filePatterns[l:startIdx] =~# '^+\{1,2}'
-	let l:startIdx += 1
-    endwhile
-    
-    if l:startIdx == 0
-	return [a:filePatterns, '']
-    else
-	return [a:filePatterns[l:startIdx : ], join(a:filePatterns[ : (l:startIdx - 1)], ' ')]
-    endif
-endfunction
 function! s:PreviewBufNr()
     for l:winnr in range(1, winnr('$'))
 	if getwinvar(l:winnr, '&previewwindow')
@@ -765,69 +742,6 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	echohl None
     endtry
 endfunction
-function! s:ContainsNoWildcards( filePattern )
-    " Note: This is only an empirical approximation; it is not perfect. 
-    if has('win32') || has('win64')
-	return a:filePattern !~ '[*?]'
-    else
-	return a:filePattern !~ '\\\@<![*?{[]'
-    endif
-endfunction
-function! s:ResolveExfilePatterns( filePatterns )
-"*******************************************************************************
-"* PURPOSE:
-"   Expand any file wildcards in a:filePatterns, convert to normal filespecs
-"   and assemble file statistics. 
-"* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
-"* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
-"* INPUTS:
-"   a:filePatterns	Raw list of file patterns. 
-"* RETURN VALUES: 
-"   [l:filespecs, l:statistics]	First element is a list of the resolved
-"   filespecs (in normal, not ex syntax), second element is a dictionary
-"   containing the file statistics.    
-"*******************************************************************************
-    let l:statistics = { 'files': 0, 'removed': 0, 'nonexisting': 0 }
-    let l:filespecs = []
-    for l:filePattern in a:filePatterns
-	let l:resolvedFilespecs = split( glob(l:filePattern), "\n" )
-	if empty(l:resolvedFilespecs)
-	    " To treat the file pattern as a filespec, we must emulate one
-	    " effect of glob(): It removes superfluous escaping of spaces in the
-	    " filespec (but leaves other escaped characters like 'C:\\foo'
-	    " as-is). Without this substitution, the filereadable() check won't
-	    " work. 
-	    let l:normalizedPotentialFilespec = substitute(l:filePattern, '\\\@<!\\ ', ' ', 'g')
-
-	    " The globbing yielded no files; however:
-	    if filereadable(l:normalizedPotentialFilespec)
-		" a) The file pattern itself represents an existing file. This
-		"    happens if a file is passed that matches one of the
-		"    'wildignore' patterns. In this case, as the file has been
-		"    explicitly passed to us, we include it. 
-		let l:filespecs += [l:normalizedPotentialFilespec]
-	    elseif s:ContainsNoWildcards(l:filePattern)
-		" b) The file pattern contains no wildcards and represents a
-		"    to-be-created file. 
-		let l:filespecs += [l:filePattern]
-		let l:statistics.nonexisting += 1
-	    else
-		" Nothing matched this file pattern, or whatever matched is
-		" covered by the 'wildignore' patterns and not a file itself. 
-		let l:statistics.removed += 1
-	    endif
-	else
-	    " We include whatever the globbing returned; 'wildignore' patterns
-	    " are filtered out. 
-	    let l:filespecs += l:resolvedFilespecs
-	endif
-    endfor
-
-    let l:statistics.files = len(l:filespecs)
-    return [l:filespecs, l:statistics]
-endfunction
 function! s:Drop( filePatternsString )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
     let l:filePatterns = split( a:filePatternsString, '\\\@<! ')
@@ -836,9 +750,9 @@ function! s:Drop( filePatternsString )
     endif
 
     " Strip off the optional ++opt +cmd file options and commands. 
-    let [l:filePatterns, l:fileOptionsAndCommands] = s:FilterFileOptionsAndCommands(l:filePatterns)
+    let [l:filePatterns, l:fileOptionsAndCommands] = ingofileargs#FilterFileOptionsAndCommands(l:filePatterns)
 
-    let [l:filespecs, l:statistics] = s:ResolveExfilePatterns(l:filePatterns)
+    let [l:filespecs, l:statistics] = ingofileargs#ResolveExfilePatterns(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:filespecs)
     if empty(l:filespecs)
