@@ -11,6 +11,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'. 
 "
 " REVISION	DATE		REMARKS 
+"	046	21-Feb-2012	FIX: Off-by-one error in getcmdline(). 
 "	045	09-Feb-2012	Split off s:FilterFileOptionsAndCommands() and
 "				s:ResolveExfilePatterns() to
 "				autoload/ingofileargs.vim to allow reuse in
@@ -849,7 +850,7 @@ endfunction
 :command! -nargs=+ -complete=file Drop call <SID>Drop(<q-args>)
 
 if g:dropquery_RemapDrop
-    cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos()) =~# '^\s*drop$' ? 'Drop' : 'drop')
+    cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos() - 1) =~# '^\s*drop$' ? 'Drop' : 'drop')
 endif
 
 let &cpo = s:save_cpo
