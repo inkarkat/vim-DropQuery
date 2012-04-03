@@ -11,6 +11,13 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'. 
 "
 " REVISION	DATE		REMARKS 
+"	047	24-Mar-2012	BUG: s:Drop() must unescape filePatterns after
+"				splitting, because the globbing done by
+"				ingofileargs#ResolveExfilePatterns() does not
+"				condense "\ " into " " when the file does not
+"				exist, and then instead of creating "new file",
+"				it would attempt to create "file" in the "new"
+"				directory.
 "	046	21-Feb-2012	FIX: Off-by-one error in getcmdline(). 
 "	045	09-Feb-2012	Split off s:FilterFileOptionsAndCommands() and
 "				s:ResolveExfilePatterns() to
@@ -745,7 +752,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 endfunction
 function! s:Drop( filePatternsString )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
-    let l:filePatterns = split( a:filePatternsString, '\\\@<! ')
+    let l:filePatterns = map(split( a:filePatternsString, '\\\@<! '), 'ingofileargs#unescape(v:val)')
     if empty( l:filePatterns )
 	throw 'Must pass at least one filespec / pattern!'
     endif
