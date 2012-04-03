@@ -11,6 +11,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'. 
 "
 " REVISION	DATE		REMARKS 
+"	048	04-Apr-2012	CHG: For single files, remove accelerator from
+"				"vsplit", add "view" instead.
 "	047	24-Mar-2012	BUG: s:Drop() must unescape filePatterns after
 "				splitting, because the globbing done by
 "				ingofileargs#ResolveExfilePatterns() does not
@@ -521,11 +523,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'new &tab', '&new GVIM']
+    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', 'new &tab', '&new GVIM']
     call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
+	call insert(l:actions, '&view', 1)
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
-	call add(l:actions, '&readonly and ask again')
     endif
     if ! a:isNonexisting && ! a:isBlankWindow
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
@@ -537,16 +539,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 	call insert(l:actions, '&goto tab')
     endif
 
-    while 1
-	let l:dropAction = s:Query(a:querytext, l:actions, 1)
-	if l:dropAction ==# 'readonly and ask again'
-	    let l:dropAttributes.readonly = 1
-	    call filter(l:actions, 'v:val !~# "readonly"')
-	else
-	    break
-	endif
-    endwhile
-
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
     return [l:dropAction, l:dropAttributes]
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
@@ -656,6 +649,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    return
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'view'
+	    execute 'confirm view' a:fileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'diff'
 	    if ! s:HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
