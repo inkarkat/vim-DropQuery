@@ -548,8 +548,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     return [l:dropAction, l:dropAttributes]
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
-    let l:dropAttributes = {'readonly': 0}
+    let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
     let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    if ! s:IsEmptyTabPage()
+	call add(l:actions, '&fresh and ask again')
+    endif
     call s:QueryActionForArguments(l:actions)
     if a:fileNum <= 4
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
@@ -568,6 +571,9 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 	elseif l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
 	    call filter(l:actions, 'v:val !~# "readonly"')
+	elseif l:dropAction ==# 'fresh and ask again'
+	    let l:dropAttributes.fresh = 1
+	    call filter(l:actions, 'v:val !~# "fresh"')
 	else
 	    break
 	endif
@@ -792,8 +798,24 @@ function! s:Drop( filePatternsString )
     try
 	if empty(l:dropAction)
 	    call s:WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
-	    return
-	elseif l:dropAction ==# 'argadd'
+	endif
+
+	if l:dropAttributes.fresh
+	    " Note: Taken from the implementation of :ZZ in ingocommands.vim.
+	    if argc() > 0
+		argdelete *
+	    endif
+	    let l:currentBufNr = bufnr('')
+	    let l:maxBufNr = bufnr('$')
+	    if l:currentBufNr > 1
+		execute printf('confirm silent! 1,%dbdelete', (l:currentBufNr - 1))
+	    endif
+	    if l:currentBufNr < l:maxBufNr
+		execute printf('confirm silent! %d,%dbdelete', (l:currentBufNr + 1), l:maxBufNr)
+	    endif
+	endif
+
+	if l:dropAction ==# 'argadd'
 	    call s:ExecuteWithoutWildignore('999argadd', l:filespecs)
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
@@ -841,6 +863,10 @@ function! s:Drop( filePatternsString )
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:filespecs )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
+	endif
+
+	if l:dropAttributes.fresh
+	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	endif
     catch /^Vim\%((\a\+)\)\=:E/
 	echohl ErrorMsg
