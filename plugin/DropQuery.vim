@@ -11,6 +11,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'. 
 "
 " REVISION	DATE		REMARKS 
+"	049	05-Apr-2012	ENH: Add "fresh" option for multiple files, too.
 "	048	04-Apr-2012	CHG: For single files, remove accelerator from
 "				"vsplit", add "view" instead.
 "				ENH: Add "fresh" option for single files, which
@@ -573,7 +574,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 	    call filter(l:actions, 'v:val !~# "readonly"')
 	elseif l:dropAction ==# 'fresh and ask again'
 	    let l:dropAttributes.fresh = 1
-	    call filter(l:actions, 'v:val !~# "fresh"')
+	    call filter(l:actions, 'v:val !~# "fresh" && v:val !~# "argadd"')
 	else
 	    break
 	endif
@@ -805,14 +806,13 @@ function! s:Drop( filePatternsString )
 	    if argc() > 0
 		argdelete *
 	    endif
-	    let l:currentBufNr = bufnr('')
-	    let l:maxBufNr = bufnr('$')
-	    if l:currentBufNr > 1
-		execute printf('confirm silent! 1,%dbdelete', (l:currentBufNr - 1))
-	    endif
-	    if l:currentBufNr < l:maxBufNr
-		execute printf('confirm silent! %d,%dbdelete', (l:currentBufNr + 1), l:maxBufNr)
-	    endif
+	    " The current buffer may be included in the dropped files, so we
+	    " should not simply :bdelete it after the drop action. Instead,
+	    " clean out all buffers, and remove the newly created buffer
+	    " afterwards. (But careful, that buffer number may have been
+	    " re-used!)
+	    execute printf('confirm silent! 1,%dbdelete', bufnr('$'))
+	    let l:newBufNr = bufnr('')
 	endif
 
 	if l:dropAction ==# 'argadd'
@@ -865,8 +865,8 @@ function! s:Drop( filePatternsString )
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
 
-	if l:dropAttributes.fresh
-	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
+	if l:dropAttributes.fresh && empty(bufname(l:newBufNr))
+	    execute printf('silent! %dbdelete', l:newBufNr)
 	endif
     catch /^Vim\%((\a\+)\)\=:E/
 	echohl ErrorMsg
