@@ -13,6 +13,8 @@
 " REVISION	DATE		REMARKS 
 "	048	04-Apr-2012	CHG: For single files, remove accelerator from
 "				"vsplit", add "view" instead.
+"				ENH: Add "fresh" option for single files, which
+"				clears all buffers and removes all arguments.
 "	047	24-Mar-2012	BUG: s:Drop() must unescape filePatterns after
 "				splitting, because the globbing done by
 "				ingofileargs#ResolveExfilePatterns() does not
@@ -529,6 +531,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 	call insert(l:actions, '&view', 1)
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
     endif
+    if ! s:IsEmptyTabPage()
+	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
+    endif
     if ! a:isNonexisting && ! a:isBlankWindow
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
@@ -698,6 +703,21 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list. 
 	    "execute 'drop' l:exfilespec . '|only'
 	    execute (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec . '|only'
+	elseif l:dropAction ==# 'fresh'
+	    " Note: Taken from the implementation of :ZZ in ingocommands.vim.
+	    if argc() > 0
+		argdelete *
+	    endif
+	    let l:currentBufNr = bufnr('')
+	    let l:maxBufNr = bufnr('$')
+	    if l:currentBufNr > 1
+		execute printf('confirm silent! 1,%dbdelete', (l:currentBufNr - 1))
+	    endif
+	    if l:currentBufNr < l:maxBufNr
+		execute printf('confirm silent! %d,%dbdelete', (l:currentBufNr + 1), l:maxBufNr)
+	    endif
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
+	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
