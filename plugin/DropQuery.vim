@@ -12,6 +12,11 @@
 "
 " REVISION	DATE		REMARKS 
 "	049	05-Apr-2012	ENH: Add "fresh" option for multiple files, too.
+"				FIX: Correct condition for "fresh" option via
+"				s:HasOtherBuffers().
+"				ENH: Change "new tab" button to "tab" button
+"				with follow-up 1, 2, new query when more than
+"				one tab is open.
 "	048	04-Apr-2012	CHG: For single files, remove accelerator from
 "				"vsplit", add "view" instead.
 "				ENH: Add "fresh" option for single files, which
@@ -280,11 +285,10 @@ function! s:IsBlankBuffer( bufnr )
     \)
 endfunction
 function! s:IsEmptyTabPage()
-    let l:isEmptyTabPage = ( 
+    return ( 
     \	tabpagewinnr(tabpagenr(), '$') <= 1 && 
     \	s:IsBlankBuffer(bufnr(''))
     \)
-    return l:isEmptyTabPage
 endfunction
 function! s:GetBlankWindowNr()
 "*******************************************************************************
@@ -349,6 +353,9 @@ endfunction
 function! s:HasDiffWindow()
     let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
     return ! empty(l:diffedWinNrs)
+endfunction
+function! s:HasOtherBuffers()
+    return ! empty(filter(range(1, bufnr('$')), 'buflisted(v:val) && v:val != bufnr("")'))
 endfunction
 
 function! s:SaveGuiOptions()
@@ -516,6 +523,15 @@ function! s:QueryActionForArguments( actions )
 	let a:actions[index(a:actions, '&argedit')] = 'argedit'
     endif
 endfunction
+function! s:QueryTab( querytext, dropAttributes )
+    let l:actions = ['&new tab'] + map(range(1, tabpagenr('$')), 'v:val < 10 ? "&" . v:val : v:val')
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    if l:dropAction =~# '^\d\+$'
+	let a:dropAttributes.tabnr = l:dropAction
+	let l:dropAction = 'tabnr'
+    endif
+    return l:dropAction
+endfunction
 function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
@@ -526,13 +542,13 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed). 
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', 'new &tab', '&new GVIM']
+    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), '&new GVIM']
     call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
 	call insert(l:actions, '&view', 1)
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
     endif
-    if ! s:IsEmptyTabPage()
+    if s:HasOtherBuffers()
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if ! a:isNonexisting && ! a:isBlankWindow
@@ -546,12 +562,16 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     endif
 
     let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    if l:dropAction ==# 'tab...'
+	let l:dropAction = s:QueryTab(a:querytext, l:dropAttributes)
+    endif
+
     return [l:dropAction, l:dropAttributes]
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
     let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
-    if ! s:IsEmptyTabPage()
+    if s:HasOtherBuffers()
 	call add(l:actions, '&fresh and ask again')
     endif
     call s:QueryActionForArguments(l:actions)
@@ -729,6 +749,15 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute '999tabedit' a:fileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
+	    endif
+	elseif l:dropAction ==# 'tabnr'
+	    execute 'tabnext' l:dropAttributes.tabnr
+	    let l:blankWindowNr = s:GetBlankWindowNr()
+	    if l:blankWindowNr == -1
+		execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') a:fileOptionsAndCommands l:exfilespec
+	    else
+		execute l:blankWindowNr . 'wincmd w'
+		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') a:fileOptionsAndCommands l:exfilespec
 	    endif
 	elseif l:dropAction ==# 'new GVIM'
 	    let l:fileOptionsAndCommands = (empty(a:fileOptionsAndCommands) ? '' : ' ' . a:fileOptionsAndCommands)
