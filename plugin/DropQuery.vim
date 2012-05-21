@@ -17,6 +17,10 @@
 "				ENH: Change "new tab" button to "tab" button
 "				with follow-up 1, 2, new query when more than
 "				one tab is open.
+"				Reintroduce single-file "readonly and ask again"
+"				that was lightheartedly removed when "view" was
+"				added. I still want to view a file in a new tab,
+"				for example.
 "	048	04-Apr-2012	CHG: For single files, remove accelerator from
 "				"vsplit", add "view" instead.
 "				ENH: Add "fresh" option for single files, which
@@ -547,6 +551,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     if ! a:isNonexisting
 	call insert(l:actions, '&view', 1)
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
+	call add(l:actions, '&readonly and ask again')
     endif
     if s:HasOtherBuffers()
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
@@ -561,7 +566,15 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 	call insert(l:actions, '&goto tab')
     endif
 
-    let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    while 1
+	let l:dropAction = s:Query(a:querytext, l:actions, 1)
+	if l:dropAction ==# 'readonly and ask again'
+	    let l:dropAttributes.readonly = 1
+	    call filter(l:actions, 'v:val !~# "readonly"')
+	else
+	    break
+	endif
+    endwhile
     if l:dropAction ==# 'tab...'
 	let l:dropAction = s:QueryTab(a:querytext, l:dropAttributes)
     endif
