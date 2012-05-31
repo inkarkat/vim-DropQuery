@@ -11,6 +11,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	051	30-May-2012	ENH: Allow custom preview window placement via
+"				g:previewwindowsplitmode.
 "	050	22-May-2012	BUG: Must re-escape a:fileOptionsAndCommands
 "				when :executing the command. Otherwise, stuff
 "				like ":Drop +setf\ txt dropquery.vim" won't
@@ -722,7 +724,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    " for a change in the previewed buffer and the setting of the
 	    " attributes has to be done differently.
 	    let l:originalPreviewBufNr = s:PreviewBufNr()
-	    execute 'confirm pedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'confirm' (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'pedit' l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly
 		let l:newPreviewBufNr = s:PreviewBufNr()
 		if l:newPreviewBufNr != l:originalPreviewBufNr
