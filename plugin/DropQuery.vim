@@ -11,6 +11,10 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	052	01-Jun-2012	BUG: Drop of single file to existing different
+"				tab is susceptible to changes of CWD; re-shorten
+"				the filespec here, too. (Also for "fresh" option
+"				out of precaution bordering paranoia.)
 "	051	30-May-2012	ENH: Allow custom preview window placement via
 "				g:previewwindowsplitmode.
 "	050	22-May-2012	BUG: Must re-escape a:fileOptionsAndCommands
@@ -763,7 +767,10 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    if l:currentBufNr < l:maxBufNr
 		execute printf('confirm silent! %d,%dbdelete', (l:currentBufNr + 1), l:maxBufNr)
 	    endif
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+	    " Note: Do not use the shortened l:exfilespec here, the :bdelete may
+	    " have changed the CWD and thus invalidated the filespec. Instead,
+	    " re-shorten the filespec.
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
 	    execute '999tabedit' l:exFileOptionsAndCommands l:exfilespec
@@ -772,6 +779,12 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    endif
 	elseif l:dropAction ==# 'tabnr'
 	    execute 'tabnext' l:dropAttributes.tabnr
+
+	    " Note: Do not use the shortened l:exfilespec here, the :tabnext may
+	    " have changed the CWD and thus invalidated the filespec. Instead,
+	    " re-shorten the filespec.
+	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
 		execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
