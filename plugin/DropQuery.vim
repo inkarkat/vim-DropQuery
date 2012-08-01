@@ -11,6 +11,11 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	054	30-Jul-2012	Change from hard-coded :999argadd to the actual
+"				max number. Same for :999tabedit.
+"	053	29-Jul-2012	BUG: Canceling multi-file drop throws "Invalid
+"				l:dropAction"; must abort function after
+"				checking for empty value and printing warning.
 "	052	01-Jun-2012	BUG: Drop of single file to existing different
 "				tab is susceptible to changes of CWD; re-shorten
 "				the filespec here, too. (Also for "fresh" option
@@ -741,7 +746,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argadd'
-	    call s:ExecuteWithoutWildignore('999argadd', [a:filespec])
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
@@ -773,7 +778,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
-	    execute '999tabedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'tabedit' l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -861,6 +866,7 @@ function! s:Drop( filePatternsString )
     try
 	if empty(l:dropAction)
 	    call s:WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
+	    return
 	endif
 
 	if l:dropAttributes.fresh
@@ -878,7 +884,7 @@ function! s:Drop( filePatternsString )
 	endif
 
 	if l:dropAction ==# 'argadd'
-	    call s:ExecuteWithoutWildignore('999argadd', l:filespecs)
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', l:filespecs)
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither.
