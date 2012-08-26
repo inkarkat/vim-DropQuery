@@ -11,6 +11,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	055	02-Aug-2012	CHG: All new tabs open as the last tab, not the
+"				next one. I think this is more useful and
+"				consistent with what browsers to.
 "	054	30-Jul-2012	Change from hard-coded :999argadd to the actual
 "				max number. Same for :999tabedit.
 "	053	29-Jul-2012	BUG: Canceling multi-file drop throws "Invalid
@@ -615,7 +618,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     while 1
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
 	if l:dropAction ==# 'open new tab and ask again'
-	    tabnew
+	    execute tabpagenr('$') . 'tabnew'
 	    call filter(l:actions, 'v:val !~# "open new tab"')
 	elseif l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
@@ -778,7 +781,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
-	    execute 'tabedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute tabpagenr('$') . 'tabedit' l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -922,8 +925,11 @@ function! s:Drop( filePatternsString )
 	    \	reverse(l:filespecs)
 	    \)
 	elseif l:dropAction ==# 'new tab'
+	    " Note: Cannot use tabpagenr('$') here, as each file will increase
+	    " it, but the expression isn't reevaluated. Just use a very large
+	    " value to force adding as the last tab page for each one.
 	    call s:ExecuteForEachFile(
-	    \	'tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
+	    \	'99999tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
