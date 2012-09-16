@@ -11,6 +11,12 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	056	27-Aug-2012	Factor out and use
+"				ingofileargs#SplitAndUnescapeArguments().
+"				Rename ingofileargs#ResolveExfilePatterns() to
+"				ingofileargs#ResolveGlobs(), as it basically is
+"				an extended version of
+"				ingofileargs#ExpandGlobs().
 "	055	02-Aug-2012	CHG: All new tabs open as the last tab, not the
 "				next one. I think this is more useful and
 "				consistent with what browsers to.
@@ -844,15 +850,15 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 endfunction
 function! s:Drop( filePatternsString )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
-    let l:filePatterns = map(split( a:filePatternsString, '\\\@<! '), 'ingofileargs#unescape(v:val)')
-    if empty( l:filePatterns )
+    let l:filePatterns = ingofileargs#SplitAndUnescapeArguments(a:filePatternsString)
+    if empty(l:filePatterns)
 	throw 'Must pass at least one filespec / pattern!'
     endif
 
     " Strip off the optional ++opt +cmd file options and commands.
     let [l:filePatterns, l:fileOptionsAndCommands] = ingofileargs#FilterFileOptionsAndCommands(l:filePatterns)
 
-    let [l:filespecs, l:statistics] = ingofileargs#ResolveExfilePatterns(l:filePatterns)
+    let [l:filespecs, l:statistics] = ingofileargs#ResolveGlobs(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:filespecs)
     if empty(l:filespecs)
@@ -952,7 +958,9 @@ function! s:Drop( filePatternsString )
     endtry
 endfunction
 
+
 "-- commands ------------------------------------------------------------------
+
 " The file pattern passed to :drop should conform to ex syntax, just as the
 " built-in :drop command would expect them:
 " - spaces, [%#] etc. are escaped with '\'
@@ -965,10 +973,11 @@ endfunction
 " passed to the s:Drop() function as one string by using <q-args> instead of
 " <f-args>; the function itself will split that into file patterns. Splitting is
 " done on (unescaped) spaces, as the file patterns to :drop are not enclosed by
-" double quotes, but contain escaped spaces.
+" double quotes, but contain escaped spaces. This also avoids the unescaping
+" peculiarities of <f-args>, which make it fundamentally unsuitable for file
+" arguments.
 " We do specify multiple arguments, so that file completion works for all
-" arguments. With -complete=file, the arguments are also automatically unescaped
-" from exfilespec to normal filespecs.
+" arguments.
 :command! -nargs=+ -complete=file Drop call <SID>Drop(<q-args>)
 
 if g:dropquery_RemapDrop
