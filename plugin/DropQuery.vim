@@ -11,6 +11,20 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	057	17-Sep-2012	Change 'show' split behavior to add custom
+"				TopLeftHook() before :topleft. Without it, when
+"				the topmost window has a winheight of 0 (in
+"				Rolodex mode), Vim somehow makes all window
+"				heights equal. I prefer to have the new window
+"				open with a minimal height of 1, and keep the
+"				other window heights as stable as possible. It's
+"				much easier to change the height of the new
+"				current window than recreating the previous
+"				Rolodex-based layout with the original and the
+"				new windows visible.
+"				Move g:previewwindowsplitmode to the front of
+"				the command to allow multiple commands joined
+"				with cmd1 | winsplitcmd2.
 "	056	27-Aug-2012	Factor out and use
 "				ingofileargs#SplitAndUnescapeArguments().
 "				Rename ingofileargs#ResolveExfilePatterns() to
@@ -736,13 +750,13 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
-	    execute 'topleft sview' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    " The :pedit command does not go to the preview window, so the check
 	    " for a change in the previewed buffer and the setting of the
 	    " attributes has to be done differently.
 	    let l:originalPreviewBufNr = s:PreviewBufNr()
-	    execute 'confirm' (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'pedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly
 		let l:newPreviewBufNr = s:PreviewBufNr()
 		if l:newPreviewBufNr != l:originalPreviewBufNr
@@ -926,7 +940,7 @@ function! s:Drop( filePatternsString )
 	    \)
 	elseif l:dropAction ==# 'show'
 	    call s:ExecuteForEachFile(
-	    \	'topleft sview' . l:fileOptionsAndCommands,
+	    \	'call TopLeftHook() | topleft sview' . l:fileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? 'view' . l:fileOptionsAndCommands : ''),
 	    \	reverse(l:filespecs)
 	    \)
