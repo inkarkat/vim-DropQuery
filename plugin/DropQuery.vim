@@ -4,13 +4,17 @@
 "
 " DEPENDENCIES:
 "   - Requires Vim 7.0 or higher.
-"   - escapings.vim autoload script.
-"   - ingofileargs.vim autoload script.
+"   - escapings.vim autoload script
+"   - ingofileargs.vim autoload script
+"   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2012 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	058	11-Dec-2012	ENH: When the current buffer is a modified,
+"				unpersisted scratch buffer, offer to "move
+"				scratch contents there".
 "	057	17-Sep-2012	Change 'show' split behavior to add custom
 "				TopLeftHook() before :topleft. Without it, when
 "				the topmost window has a winheight of 0 (in
@@ -603,6 +607,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
     endif
+    if &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+	call insert(l:actions, '&move scratch contents there', 1)
+    endif
 
     while 1
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
@@ -850,6 +857,9 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the filespec.
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	elseif l:dropAction ==# 'move scratch contents there'
+	    execute 'belowright split' l:exFileOptionsAndCommands l:exfilespec
+	    execute '$MoveChangesHere'
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
