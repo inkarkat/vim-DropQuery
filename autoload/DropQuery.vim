@@ -647,6 +647,48 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     return [l:dropAction, l:dropAttributes]
 endfunction
 
+function! s:IsMoveAway()
+    for l:Predicate in g:DropQuery_MoveAwayPredicates
+	if ingoactions#EvaluateOrFunc(l:Predicate)
+	    return 1
+	endif
+    endfor
+    return 0
+endfunction
+function! s:MoveAway()
+    if winnr('$') == 1
+	return 0 " Nowhere to turn to.
+    endif
+
+    if s:IsMoveAway()
+	if winnr('#') != winnr()
+	    " Try the previous window first.
+	    wincmd p
+	    if ! s:IsMoveAway()
+		return 1    " Okay, we can stay there.
+	    endif
+	endif
+
+	" Check all other available windows until we find one where we can stay.
+	let l:originalWinNr = winnr()
+	for l:winNr in filter(range(1, winnr('$')), 'v:val != l:originalWinNr')
+	    execute l:winNr . 'wincmd w'
+	    if ! s:IsMoveAway()
+		return 1
+	    endif
+	endfor
+
+	" No chance; remain at the original window.
+	execute l:originalWinNr . 'wincmd w'
+    endif
+
+    return 0
+endfunction
+function! s:RestoreMove( isMovedAway, originalWinNr )
+    if a:isMovedAway
+	execute a:originalWinNr . 'wincmd w'
+    endif
+endfunction
 function! s:PreviewBufNr()
     for l:winnr in range(1, winnr('$'))
 	if getwinvar(l:winnr, '&previewwindow')
@@ -717,6 +759,9 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     let l:exFileOptionsAndCommands = escape(a:fileOptionsAndCommands, ' \')
     let l:dropAttributes = {'readonly': 0}
 
+    let l:originalBufNr = bufnr('')
+    let l:originalWinNr = winnr()
+    let l:isMovedAway = 0
     let l:tabPageNr = s:GetTabPageNr(a:filespec)
     if s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
@@ -725,14 +770,19 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
+	let l:isMovedAway = s:MoveAway()
+	if l:isMovedAway
+	    " Make the automatic switch of the current window visible before
+	    " querying the user.
+	    redraw
+	endif
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
-    let l:originalBufNr = bufnr('')
     try
 	if empty(l:dropAction)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
-	    return
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'view'
@@ -754,6 +804,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    " The :pedit command does not go to the preview window, so the check
 	    " for a change in the previewed buffer and the setting of the
 	    " attributes has to be done differently.
@@ -771,6 +823,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argadd'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
@@ -803,11 +857,15 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    execute tabpagenr('$') . 'tabedit' l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'tabnr'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    execute 'tabnext' l:dropAttributes.tabnr
 
 	    " Note: Do not use the shortened l:exfilespec here, the :tabnext may
@@ -823,9 +881,13 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	    endif
 	elseif l:dropAction ==# 'new GVIM'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
 	elseif l:dropAction ==# 'goto tab'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
 	    " argument list.
@@ -837,6 +899,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    endif
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'goto'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file.
@@ -847,6 +911,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    endif
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'use blank window'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
