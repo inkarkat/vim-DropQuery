@@ -12,6 +12,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	060	25-Jan-2013	ENH: When the current window is the preview
+"				window, move that action to the front, and
+"				remove the superfluous equivalent edit action.
 "	059	25-Jan-2013	Split off autoload script.
 "				Use ingo#msg#WarningMsg() and
 "				ingo#msg#VimExceptionMsg().
@@ -563,6 +566,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), '&new GVIM']
+    if &l:previewwindow
+	" When the current window is the preview window, move that action to the
+	" front, and remove the superfluous equivalent edit action.
+	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+    endif
     call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
 	call insert(l:actions, '&view', 1)
