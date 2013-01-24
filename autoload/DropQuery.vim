@@ -6,6 +6,7 @@
 "   - ingo/msg.vim autoload script
 "   - escapings.vim autoload script
 "   - ingofileargs.vim autoload script
+"   - ingowindow.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2013 Ingo Karkat
@@ -15,6 +16,9 @@
 "	060	25-Jan-2013	ENH: When the current window is the preview
 "				window, move that action to the front, and
 "				remove the superfluous equivalent edit action.
+"				ENH: The quickfix list (but not a location list)
+"				should remain at the bottom of Vim; do not use
+"				'belowright' for horizontal splits then.
 "	059	25-Jan-2013	Split off autoload script.
 "				Use ingo#msg#WarningMsg() and
 "				ingo#msg#VimExceptionMsg().
@@ -651,6 +655,15 @@ function! s:PreviewBufNr()
     endfor
     return -1
 endfunction
+function! s:HorizontalSplitModifier()
+    if ingowindow#IsQuickfixList(1) == 1
+	" The quickfix list (but not a location list) should remain at the
+	" bottom of Vim.
+	return 'aboveleft'
+    endif
+
+    return 'belowright'
+endfunction
 function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 "******************************************************************************
 "* PURPOSE:
@@ -732,10 +745,10 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    endif
 	    " Like :diffsplit, evaluate the 'diffopt' option to determine
 	    " whether to split horizontally or vertically.
-	    execute 'belowright' (&diffopt =~# 'vertical' ? 'vertical' : '') (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+	    execute (&diffopt =~# 'vertical' ? 'belowright vertical' : s:HorizontalSplitModifier()) (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	    diffthis
 	elseif l:dropAction ==# 'split'
-	    execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+	    execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
@@ -804,7 +817,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
-		execute 'belowright' (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+		execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	    else
 		execute l:blankWindowNr . 'wincmd w'
 		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
