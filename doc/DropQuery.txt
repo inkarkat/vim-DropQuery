@@ -1,0 +1,85 @@
+*dropquery.txt*          Summary sentence. 
+		        ^ Start here. v Center this. 
+		       DROPQUERY    by Ingo Karkat
+								*dropquery.vim*
+description			|dropquery-description|
+usage				|dropquery-usage|
+installation			|dropquery-installation|
+configuration			|dropquery-configuration|
+integration			|dropquery-integration|
+limitations			|dropquery-limitations|
+known problems			|dropquery-known-problems|
+todo				|dropquery-todo|
+history				|dropquery-history|
+
+==============================================================================
+DESCRIPTION				       *dropquery-description*
+
+This plugin ...
+
+HOW IT WORKS								     *
+
+RELATED WORKS								     *
+
+tcmdbar.vim : Script for use with Total Commander's button bar (vimscript #1779) by Andy Wokula
+==============================================================================
+USAGE						     *dropquery-usage*
+								 *<Leader>Foo*
+<Leader>Foo		Description here. 
+							  *:dropquery*
+:dropquery	Description here. 
+
+EXAMPLE						   *dropquery-example*
+
+==============================================================================
+INSTALLATION				      *dropquery-installation*
+
+This script is packaged as a |vimball|. If you have the "gunzip" decompressor
+in your PATH, simply edit the *.vba.gz package in Vim; otherwise, decompress
+the archive first, e.g. using WinZip. Inside Vim, install by sourcing the
+vimball or via the |:UseVimball| command. >
+    vim dropquery.vba.gz
+    :so %
+To uninstall, use the |:RmVimball| command. 
+
+DEPENDENCIES				      *dropquery-dependencies*
+
+- Requires Vim 7.0 or higher. 
+
+==============================================================================
+CONFIGURATION				     *dropquery-configuration*
+
+For a permanent configuration, put the following commands into your |vimrc|: 
+
+						*g:dropquery_MyOption*
+To change the default TODO from FOO to BAR, use: >
+    let g:dropquery_MyOption = 'BAR'
+<
+==============================================================================
+INTEGRATION				       *dropquery-integration*
+
+==============================================================================
+LIMITATIONS				       *dropquery-limitations*
+
+KNOWN PROBLEMS				    *dropquery-known-problems*
+
+TODO						      *dropquery-todo*
+
+IDEAS						     *dropquery-ideas*
+
+==============================================================================
+HISTORY						   *dropquery-history*
+
+1.00	30-Jan-2012
+First published version. 
+
+0.01	30-Jan-2012
+Started development. 
+
+==============================================================================
+Copyright: (C) 2012 Ingo Karkat
+The VIM LICENSE applies to this script; see |copyright|. 
+
+Maintainer:	Ingo Karkat <ingo@karkat.de>
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
