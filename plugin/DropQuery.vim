@@ -10,6 +10,15 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	060	25-Jan-2013	ENH: Move away from special windows (like the
+"				sidebar panels from plugins like Project,
+"				TagBar, NERD_tree, etc.) before querying the
+"				user. It does not make sense to re-use that
+"				special (small) window, and neither to do
+"				(horizontal) splits.
+"				The special windows are detected via predicate
+"				expressions or functions configured in
+"				g:DropQuery_MoveAwayPredicates.
 "	059	25-Jan-2013	Split off autoload script.
 "				Rename to DropQuery.vim.
 "	058	11-Dec-2012	ENH: When the current buffer is a modified,
@@ -301,17 +310,15 @@ set cpo&vim
 "-- configuration -------------------------------------------------------------
 
 if ! exists('g:DropQuery_RemapDrop')
-    " If set, remaps the built-in ':drop' command to use ':Drop' instead.
-    " With this option, other integrations (e.g. VisVim) need not be modified to
-    " use the DropQuery functionality.
     let g:DropQuery_RemapDrop = 1
 endif
 if !exists('g:DropQuery_NoPopup')
-    " If set, doesn't use a pop-up dialog in GVIM for the query. Instead, a
-    " textual query (as is done in the console Vim) is used. This does not cover
-    " the :confirm query "Save changes to...?" when abandoning modified buffers.
     let g:DropQuery_NoPopup = 0
 endif
+if ! exists('g:DropQuery_MoveAwayPredicates')
+    let g:DropQuery_MoveAwayPredicates = []
+endif
+
 
 
 "-- commands ------------------------------------------------------------------
