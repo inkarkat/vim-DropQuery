@@ -5,6 +5,7 @@
 " DEPENDENCIES:
 "   - ingo/msg.vim autoload script
 "   - escapings.vim autoload script
+"   - ingoactions.vim autoload script
 "   - ingofileargs.vim autoload script
 "   - ingowindow.vim autoload script
 "   - :MoveChangesHere command (optional)
@@ -19,6 +20,15 @@
 "				ENH: The quickfix list (but not a location list)
 "				should remain at the bottom of Vim; do not use
 "				'belowright' for horizontal splits then.
+"				ENH: Move away from special windows (like the
+"				sidebar panels from plugins like Project,
+"				TagBar, NERD_tree, etc.) before querying the
+"				user. It does not make sense to re-use that
+"				special (small) window, and neither to do
+"				(horizontal) splits.
+"				The special windows are detected via predicate
+"				expressions or functions configured in
+"				g:DropQuery_MoveAwayPredicates.
 "	059	25-Jan-2013	Split off autoload script.
 "				Use ingo#msg#WarningMsg() and
 "				ingo#msg#VimExceptionMsg().
@@ -652,6 +662,7 @@ function! s:IsMoveAway()
 	if ingoactions#EvaluateOrFunc(l:Predicate)
 	    return 1
 	endif
+	unlet l:Predicate   " The type might change, avoid E706.
     endfor
     return 0
 endfunction
@@ -661,6 +672,7 @@ function! s:MoveAway()
     endif
 
     if s:IsMoveAway()
+	let l:originalWinNr = winnr()
 	if winnr('#') != winnr()
 	    " Try the previous window first.
 	    wincmd p
@@ -670,7 +682,6 @@ function! s:MoveAway()
 	endif
 
 	" Check all other available windows until we find one where we can stay.
-	let l:originalWinNr = winnr()
 	for l:winNr in filter(range(1, winnr('$')), 'v:val != l:originalWinNr')
 	    execute l:winNr . 'wincmd w'
 	    if ! s:IsMoveAway()
@@ -683,6 +694,15 @@ function! s:MoveAway()
     endif
 
     return 0
+endfunction
+function! s:MoveAwayAndRefresh()
+    let l:isMovedAway = s:MoveAway()
+    if l:isMovedAway
+	" Make the automatic switch of the current window visible before
+	" querying the user.
+	redraw
+    endif
+    return l:isMovedAway
 endfunction
 function! s:RestoreMove( isMovedAway, originalWinNr )
     if a:isMovedAway
@@ -770,12 +790,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
-	let l:isMovedAway = s:MoveAway()
-	if l:isMovedAway
-	    " Make the automatic switch of the current window visible before
-	    " querying the user.
-	    redraw
-	endif
+	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
@@ -949,11 +964,14 @@ function! DropQuery#Drop( filePatternsString )
 	return
     endif
 
+    let l:originalWinNr = winnr()
+    let l:isMovedAway = s:MoveAwayAndRefresh()
     let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
 
     let l:fileOptionsAndCommands = (empty(l:fileOptionsAndCommands) ? '' : ' ' . l:fileOptionsAndCommands)
     try
 	if empty(l:dropAction)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
 	    return
 	endif
@@ -973,6 +991,8 @@ function! DropQuery#Drop( filePatternsString )
 	endif
 
 	if l:dropAction ==# 'argadd'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', l:filespecs)
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
@@ -1011,6 +1031,8 @@ function! DropQuery#Drop( filePatternsString )
 	    \	reverse(l:filespecs)
 	    \)
 	elseif l:dropAction ==# 'new tab'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    " Note: Cannot use tabpagenr('$') here, as each file will increase
 	    " it, but the expression isn't reevaluated. Just use a very large
 	    " value to force adding as the last tab page for each one.
@@ -1020,6 +1042,8 @@ function! DropQuery#Drop( filePatternsString )
 	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'new GVIM'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:filespecs )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
