@@ -1,84 +1,103 @@
-*dropquery.txt*          Summary sentence. 
-		        ^ Start here. v Center this. 
-		       DROPQUERY    by Ingo Karkat
-								*dropquery.vim*
-description			|dropquery-description|
-usage				|dropquery-usage|
-installation			|dropquery-installation|
-configuration			|dropquery-configuration|
-integration			|dropquery-integration|
-limitations			|dropquery-limitations|
-known problems			|dropquery-known-problems|
-todo				|dropquery-todo|
-history				|dropquery-history|
+*DropQuery.txt*         Ask the user how a :drop'ped file be opened.
+
+			 DROPQUERY    by Ingo Karkat
+							       *DropQuery.vim*
+description			|DropQuery-description|
+usage				|DropQuery-usage|
+installation			|DropQuery-installation|
+configuration			|DropQuery-configuration|
+integration			|DropQuery-integration|
+limitations			|DropQuery-limitations|
+known problems			|DropQuery-known-problems|
+todo				|DropQuery-todo|
+history				|DropQuery-history|
 
 ==============================================================================
-DESCRIPTION				       *dropquery-description*
+DESCRIPTION					       *DropQuery-description*
 
 This plugin ...
 
 HOW IT WORKS								     *
 
+SOURCE									     *
+(Original Vim tip, Stack Overflow answer, ...)
+
+SEE ALSO								     *
+(Plugins offering complementary functionality, or plugins using this library.)
+
 RELATED WORKS								     *
 
-tcmdbar.vim : Script for use with Total Commander's button bar (vimscript #1779) by Andy Wokula
-==============================================================================
-USAGE						     *dropquery-usage*
-								 *<Leader>Foo*
-<Leader>Foo		Description here. 
-							  *:dropquery*
-:dropquery	Description here. 
-
-EXAMPLE						   *dropquery-example*
+- tcmdbar.vim (vimscript #1779) is a script for use with Total Commander's
+  button bar by Andy Wokula
 
 ==============================================================================
-INSTALLATION				      *dropquery-installation*
+USAGE							     *DropQuery-usage*
+								       *:Drop*
+:Drop [++opt] [+cmd] {file} ...
+			Automatically locate the visible {file}, use the empty
+			tab page for it, or ask where to open {file}.
+
+==============================================================================
+INSTALLATION					      *DropQuery-installation*
 
 This script is packaged as a |vimball|. If you have the "gunzip" decompressor
-in your PATH, simply edit the *.vba.gz package in Vim; otherwise, decompress
+in your PATH, simply edit the *.vmb.gz package in Vim; otherwise, decompress
 the archive first, e.g. using WinZip. Inside Vim, install by sourcing the
 vimball or via the |:UseVimball| command. >
-    vim dropquery.vba.gz
+    vim DropQuery*.vmb.gz
     :so %
-To uninstall, use the |:RmVimball| command. 
+To uninstall, use the |:RmVimball| command.
 
-DEPENDENCIES				      *dropquery-dependencies*
+DEPENDENCIES					      *DropQuery-dependencies*
 
-- Requires Vim 7.0 or higher. 
+- Requires Vim 7.0 or higher.
 
 ==============================================================================
-CONFIGURATION				     *dropquery-configuration*
+CONFIGURATION					     *DropQuery-configuration*
 
-For a permanent configuration, put the following commands into your |vimrc|: 
-
-						*g:dropquery_MyOption*
-To change the default TODO from FOO to BAR, use: >
-    let g:dropquery_MyOption = 'BAR'
+For a permanent configuration, put the following commands into your |vimrc|:
+						       *g:DropQuery_RemapDrop*
+By default, the plugins remaps the built-in |:drop| command to use |:Drop|
+instead. With this option, other integrations (e.g. VisVim) need not be
+modified to use the DropQuery functionality. To turn this off, use: >
+    let g:DropQuery_RemapDrop = 0
+<							 *g:DropQuery_NoPopup*
+The plugin uses a pop-up dialog in GVIM for the query. To use a textual query
+(as is done in the console Vim) instead, use: >
+    let g:DropQuery_NoPopup = 'default value'
+This does not cover the :confirm query "Save changes to...?" when abandoning
+modified buffers.
+					      *g:DropQuery_MoveAwayPredicates*
+To exempt certain windows from being targets for direct dropping, and move
+away from them before querying for a drop action, you can define predicate
+expressions or Funcrefs to characterize such windows in the following List: >
+    let g:DropQuery_MoveAwayPredicates = ["&filetype == 'scratch'"]
 <
-==============================================================================
-INTEGRATION				       *dropquery-integration*
 
 ==============================================================================
-LIMITATIONS				       *dropquery-limitations*
-
-KNOWN PROBLEMS				    *dropquery-known-problems*
-
-TODO						      *dropquery-todo*
-
-IDEAS						     *dropquery-ideas*
+INTEGRATION					       *DropQuery-integration*
 
 ==============================================================================
-HISTORY						   *dropquery-history*
+LIMITATIONS					       *DropQuery-limitations*
 
-1.00	30-Jan-2012
-First published version. 
+KNOWN PROBLEMS					    *DropQuery-known-problems*
 
-0.01	30-Jan-2012
-Started development. 
+TODO							      *DropQuery-todo*
+
+IDEAS							     *DropQuery-ideas*
 
 ==============================================================================
-Copyright: (C) 2012 Ingo Karkat
-The VIM LICENSE applies to this script; see |copyright|. 
+HISTORY							   *DropQuery-history*
+
+GOAL
+First published version.
+
+0.01	23-May-2005
+Started development.
+
+==============================================================================
+Copyright: (C) 2005-2013 Ingo Karkat
+The VIM LICENSE applies to this script; see |copyright|.
 
 Maintainer:	Ingo Karkat <ingo@karkat.de>
 ==============================================================================
