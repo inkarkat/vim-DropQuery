@@ -351,28 +351,26 @@ function! s:GetBlankWindowNr()
     endfor
     return -1
 endfunction
-function! s:GetTabPageNr( filespec )
+function! s:GetTabPageNr( targetBufNr )
 "*******************************************************************************
 "* PURPOSE:
-"   If a:filespec has been loaded into a buffer that is visible on another tab
-"   page, return the tab page number.
+"   If a:targetBufNr is visible on another tab page, return the tab page number.
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:filespec
+"   a:targetBufNr Number of existing buffer.
 "* RETURN VALUES:
 "   Tab page number of the first tab page (other than the current one) where the
 "   buffer is visible; else -1.
 "*******************************************************************************
-    if tabpagenr('$') == 1
-	return -1   " There's only one tab.
+    if a:targetBufNr == -1
+	return -1   " There's no such buffer.
     endif
 
-    let l:targetBufNr = bufnr(escapings#bufnameescape(a:filespec))
-    if l:targetBufNr == -1
-	return -1   " There's no such buffer.
+    if tabpagenr('$') == 1
+	return -1   " There's only one tab.
     endif
 
     for l:tabPage in range( 1, tabpagenr('$') )
@@ -380,7 +378,7 @@ function! s:GetTabPageNr( filespec )
 	    continue	" Skip current tab page.
 	endif
 	for l:bufNr in tabpagebuflist( l:tabPage )
-	    if l:bufNr == l:targetBufNr
+	    if l:bufNr == a:targetBufNr
 		return l:tabPage	" Found the buffer on this tab page.
 	    endif
 	endfor
@@ -656,6 +654,38 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
+function! s:QueryActionForBuffer( querytext, isOpenInAnotherTabPage, isBlankWindow )
+    let l:dropAttributes = {'readonly': 0}
+
+    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...')]
+    if &l:previewwindow
+	" When the current window is the preview window, move that action to the
+	" front, and remove the superfluous equivalent edit action.
+	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+    endif
+    call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
+    if s:HasOtherBuffers()
+	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
+    endif
+    if a:isBlankWindow
+	call insert(l:actions, 'use &blank window')
+    else
+	call insert(l:actions, '&diff', index(l:actions, '&split'))
+    endif
+    if a:isOpenInAnotherTabPage
+	call insert(l:actions, '&goto tab')
+    endif
+    if &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+	call insert(l:actions, '&move scratch contents there', 1)
+    endif
+
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    if l:dropAction ==# 'tab...'
+	let l:dropAction = s:QueryTab(a:querytext, l:dropAttributes)
+    endif
+
+    return [l:dropAction, l:dropAttributes]
+endfunction
 
 function! s:IsMoveAway()
     for l:Predicate in g:DropQuery_MoveAwayPredicates
@@ -758,6 +788,7 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 	endif
     endfor
 endfunction
+
 function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
@@ -782,7 +813,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
     let l:isMovedAway = 0
-    let l:tabPageNr = s:GetTabPageNr(a:filespec)
+    let l:tabPageNr = s:GetTabPageNr(bufnr(escapings#bufnameescape(a:filespec)))
     if s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
     elseif s:IsVisibleWindow(a:filespec)
@@ -1051,6 +1082,128 @@ function! DropQuery#Drop( filePatternsString )
 
 	if l:dropAttributes.fresh && empty(bufname(l:newBufNr))
 	    execute printf('silent! %dbdelete', l:newBufNr)
+	endif
+    catch /^Vim\%((\a\+)\)\=:E/
+	call ingo#msg#VimExceptionMsg()
+    endtry
+endfunction
+function! DropQuery#DropBuffer( bufNr, ... )
+"*******************************************************************************
+"* PURPOSE:
+"   Prompts the user for the action to be taken with the dropped buffer number.
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"   a:bufNr Number of existing buffer.
+"* RETURN VALUES:
+"   none
+"*******************************************************************************
+    let l:bufNr = (a:0 ? bufnr(a:1) : a:bufNr)
+    if ! bufexists(l:bufNr)
+	call ingo#msg#ErrorMsg('No such buffer: ' . (a:0 ? a:1 : a:bufNr))
+	return
+    endif
+    let l:bufName = bufname(l:bufNr)
+
+    let l:originalBufNr = bufnr('')
+    let l:originalWinNr = winnr()
+    let l:isMovedAway = 0
+    let l:tabPageNr = s:GetTabPageNr(l:bufNr)
+    if s:IsEmptyTabPage() && l:tabPageNr == -1
+	let l:dropAction = 'edit'
+    elseif bufwinnr(l:bufNr) != -1
+	let l:dropAction = 'goto'
+    elseif ! empty(filereadable(l:bufName))
+	call s:DropSingleFile(l:bufName, printf('Action for %s?', l:bufName), '')
+	return
+    else
+	let l:blankWindowNr = s:GetBlankWindowNr()
+	let l:isMovedAway = s:MoveAwayAndRefresh()
+	let l:querytext = printf('Action for dropped buffer #%d%s?', l:bufNr, (empty(l:bufName) ? '' : ': ' . l:bufName))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
+    endif
+
+    try
+	if empty(l:dropAction)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call ingo#msg#WarningMsg('Canceled opening of buffer #' . l:bufNr)
+	elseif l:dropAction ==# 'edit'
+	    execute 'confirm buffer' l:bufNr
+	elseif l:dropAction ==# 'diff'
+	    if ! s:HasDiffWindow()
+		" Emulate :diffsplit because it doesn't allow to open the file
+		" read-only.
+		diffthis
+	    endif
+	    " Like :diffsplit, evaluate the 'diffopt' option to determine
+	    " whether to split horizontally or vertically.
+	    execute (&diffopt =~# 'vertical' ? 'belowright vertical' : s:HorizontalSplitModifier()) 'sbuffer' l:bufNr
+	    diffthis
+	elseif l:dropAction ==# 'split'
+	    execute s:HorizontalSplitModifier() 'sbuffer' l:bufNr
+	elseif l:dropAction ==# 'vsplit'
+	    execute 'belowright vertical sbuffer' l:bufNr
+	elseif l:dropAction ==# 'show'
+	    execute 'call TopLeftHook() | topleft sbuffer' l:bufNr
+	elseif l:dropAction ==# 'preview'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    if &l:previewwindow
+		execute 'confirm buffer' l:bufNr
+	    else
+		call ingowindow#OpenPreview()
+		execute 'confirm buffer' l:bufNr
+		wincmd p
+	    endif
+	elseif l:dropAction ==# 'only'
+	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
+	    "execute 'drop' l:exfilespec . '|only'
+	    execute 'sbuffer' l:bufNr . '|only'
+	elseif l:dropAction ==# 'fresh'
+	    " Note: Taken from the implementation of :ZZ in ingocommands.vim.
+	    if argc() > 0
+		argdelete *
+	    endif
+	    execute 'confirm buffer' l:bufNr
+	    let l:maxBufNr = bufnr('$')
+	    if l:bufNr > 1
+		execute printf('confirm silent! 1,%dbdelete', (l:bufNr - 1))
+	    endif
+	    if l:bufNr < l:maxBufNr
+		execute printf('confirm silent! %d,%dbdelete', (l:bufNr + 1), l:maxBufNr)
+	    endif
+	elseif l:dropAction ==# 'new tab'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    execute tabpagenr('$') . 'tab sbuffer' l:bufNr
+	elseif l:dropAction ==# 'tabnr'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    execute 'tabnext' l:dropAttributes.tabnr
+
+	    let l:blankWindowNr = s:GetBlankWindowNr()
+	    if l:blankWindowNr == -1
+		execute s:HorizontalSplitModifier() 'sbuffer' l:bufNr
+	    else
+		execute l:blankWindowNr . 'wincmd w'
+		execute 'confirm buffer' l:bufNr
+	    endif
+	elseif l:dropAction ==# 'goto'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    execute bufwinnr(l:bufNr) . 'wincmd w'
+	elseif l:dropAction ==# 'use blank window'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    execute l:blankWindowNr . 'wincmd w'
+	    execute 'buffer' l:bufNr
+	elseif l:dropAction ==# 'move scratch contents there'
+	    execute 'belowright sbuffer' l:bufNr
+	    execute '$MoveChangesHere'
+	else
+	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
     catch /^Vim\%((\a\+)\)\=:E/
 	call ingo#msg#VimExceptionMsg()
