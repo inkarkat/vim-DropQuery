@@ -14,6 +14,23 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	061	26-Jan-2013	ENH: Implement :BufDrop command that takes
+"				either an existing buffer number or name.
+"				Delegate to s:DropSingleFile() for buffers
+"				representing an existing file, and query from a
+"				reduced set of actions for non-persisted
+"				buffers.
+"				FIX: "fresh" action first :bdeleted the dropped
+"				file's buffer if it's already loaded. Since I
+"				don't remember and can't find a good reason for
+"				why the current buffer was spared in deletion,
+"				then replaced with the dropped one and finally
+"				deleted, let's drop first (with edit!), then
+"				delete all other buffers.
+"				FIX: Condition for "fresh" option still wrong.
+"				Need to except the dropped buffer (number, or
+"				file if it's already loaded), not the current
+"				one.
 "	060	25-Jan-2013	ENH: When the current window is the preview
 "				window, move that action to the front, and
 "				remove the superfluous equivalent edit action.
@@ -389,8 +406,8 @@ function! s:HasDiffWindow()
     let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
     return ! empty(l:diffedWinNrs)
 endfunction
-function! s:HasOtherBuffers()
-    return ! empty(filter(range(1, bufnr('$')), 'buflisted(v:val) && v:val != bufnr("")'))
+function! s:HasOtherBuffers( targetBufNr )
+    return ! empty(filter(range(1, bufnr('$')), 'buflisted(v:val) && v:val != a:targetBufNr'))
 endfunction
 
 function! s:SaveGuiOptions()
@@ -567,7 +584,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -589,7 +606,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, isOpenInAnotherT
 	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
 	call add(l:actions, '&readonly and ask again')
     endif
-    if s:HasOtherBuffers()
+    if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if ! a:isNonexisting && ! a:isBlankWindow
@@ -623,7 +640,7 @@ endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
     let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
-    if s:HasOtherBuffers()
+    if s:HasOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
     call s:QueryActionForArguments(l:actions)
@@ -654,7 +671,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForBuffer( querytext, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...')]
@@ -664,7 +681,7 @@ function! s:QueryActionForBuffer( querytext, isOpenInAnotherTabPage, isBlankWind
 	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
     endif
     call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
-    if s:HasOtherBuffers()
+    if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if a:isBlankWindow
@@ -821,8 +838,9 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
+	let l:hasOtherBuffers = s:HasOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
-	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, isNonexisting, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, l:isNonexisting, l:hasOtherBuffers, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
     try
@@ -889,19 +907,16 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	    if argc() > 0
 		argdelete *
 	    endif
-	    let l:currentBufNr = bufnr('')
+
+	    execute (l:dropAttributes.readonly ? 'view!' : 'edit!') l:exFileOptionsAndCommands l:exfilespec
+	    let l:newBufNr = bufnr('')
 	    let l:maxBufNr = bufnr('$')
-	    if l:currentBufNr > 1
-		execute printf('confirm silent! 1,%dbdelete', (l:currentBufNr - 1))
+	    if l:newBufNr > 1
+		execute printf('confirm silent! 1,%dbdelete', (l:newBufNr - 1))
 	    endif
-	    if l:currentBufNr < l:maxBufNr
-		execute printf('confirm silent! %d,%dbdelete', (l:currentBufNr + 1), l:maxBufNr)
+	    if l:newBufNr < l:maxBufNr
+		execute printf('confirm silent! %d,%dbdelete', (l:newBufNr + 1), l:maxBufNr)
 	    endif
-	    " Note: Do not use the shortened l:exfilespec here, the :bdelete may
-	    " have changed the CWD and thus invalidated the filespec. Instead,
-	    " re-shorten the filespec.
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
-	    execute printf('confirm silent! %dbdelete', l:currentBufNr)
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1122,7 +1137,7 @@ function! DropQuery#DropBuffer( bufNr, ... )
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let l:querytext = printf('Action for dropped buffer #%d%s?', l:bufNr, (empty(l:bufName) ? '' : ': ' . l:bufName))
-	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext, s:HasOtherBuffers(l:bufNr), (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
     endif
 
     try
