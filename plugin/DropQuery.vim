@@ -10,6 +10,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	061	26-Jan-2013	ENH: Implement :BufDrop command that takes
+"				either an existing buffer number or name.
 "	060	25-Jan-2013	ENH: Move away from special windows (like the
 "				sidebar panels from plugins like Project,
 "				TagBar, NERD_tree, etc.) before querying the
@@ -341,6 +343,8 @@ endif
 " We do specify multiple arguments, so that file completion works for all
 " arguments.
 command! -nargs=+ -complete=file Drop call DropQuery#Drop(<q-args>)
+
+command! -count=0 -nargs=? -complete=buffer BufDrop call DropQuery#DropBuffer(<count>, <f-args>)
 
 if g:DropQuery_RemapDrop
     cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos() - 1) =~# '^\s*drop$' ? 'Drop' : 'drop')
