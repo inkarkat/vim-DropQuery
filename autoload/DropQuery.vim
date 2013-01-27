@@ -480,6 +480,10 @@ endfunction
 function! s:ShortenFilespec( filespec )
     return fnamemodify(a:filespec, ':~:.')
 endfunction
+function! s:ExternalGvim( commands )
+    let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
+    execute l:exCommandForExternalGvim join(map(a:commands, '"-c " . escapings#shellescape(v:val, 1)'))
+endfunction
 function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
@@ -494,14 +498,12 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "* RETURN VALUES:
 "   none
 "*******************************************************************************
-    let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
-
     for l:filespec in a:filespecs
 	" Simply passing the file as an argument to GVIM would add the file to
 	" the argument list. We're using an explicit a:openCommand instead.
 	" Bonus: With this, special handling of the 'readonly' attribute (-R
 	" argument) is avoided.
-	execute l:exCommandForExternalGvim '-c' escapings#shellescape(a:openCommand . ' ' . escapings#fnameescape(s:ShortenFilespec(l:filespec)), 1)
+	call s:ExternalGvim([a:openCommand . ' ' . escapings#fnameescape(s:ShortenFilespec(l:filespec))])
     endfor
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ... )
@@ -693,7 +695,7 @@ endfunction
 function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
-    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...')]
+    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), '&new GVIM']
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
@@ -981,11 +983,6 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 		execute l:blankWindowNr . 'wincmd w'
 		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	    endif
-	elseif l:dropAction ==# 'new GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
 	elseif l:dropAction ==# 'goto tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1019,6 +1016,11 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the filespec.
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	elseif l:dropAction ==# 'new GVIM'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
+	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright split' l:exFileOptionsAndCommands l:exfilespec
 	    execute '$MoveChangesHere'
@@ -1260,6 +1262,15 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 		execute l:blankWindowNr . 'wincmd w'
 		execute 'confirm buffer' l:bufNr
 	    endif
+	elseif l:dropAction ==# 'goto tab'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    " The :drop command would do the trick and switch to the correct tab
+	    " page, but it is to be avoided as it adds the dropped file to the
+	    " argument list.
+	    " Instead, first go to the tab page, then activate the correct window.
+	    execute 'tabnext' l:tabPageNr
+	    execute bufwinnr(l:bufNr) . 'wincmd w'
 	elseif l:dropAction ==# 'goto window'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1269,6 +1280,26 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    execute 'buffer' l:bufNr
+	elseif l:dropAction ==# 'new GVIM'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    let l:tempFilespec = tempname()
+	    let l:bufContents = getbufline(l:bufNr, 1, '$')
+	    if getbufvar(l:bufNr, '&fileformat') ==# 'dos'
+		call map(l:bufContents, 'v:val . "\r"')
+	    endif
+
+	    if writefile(l:bufContents, l:tempFilespec) == -1
+		call ingo#msg#ErrorMsg('Write of transfer temp file failed: ' . l:tempFilespec)
+		return
+	    endif
+
+	    call s:ExternalGvim([
+	    \   'edit ' . escapings#fnameescape(l:tempFilespec),
+	    \   'chdir ' . escapings#fnameescape(getcwd()),
+	    \   (empty(l:bufName) ? '0file' : 'file ' . escapings#fnameescape(fnamemodify(l:bufName, ':p'))),
+	    \   printf('call delete(%s)',  string(l:tempFilespec))
+	    \])
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright sbuffer' l:bufNr
 	    execute '$MoveChangesHere'
