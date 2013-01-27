@@ -14,6 +14,14 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	062	27-Jan-2013	ENH: Allow forced query with [!]. Check for
+"				current buffer already containing the dropped
+"				target and omit senseless actions like "goto
+"				window", "edit", "view", "diff", "move scratch
+"				contents there", etc. then.
+"				:BufDrop with neither [N] nor {bufname} brings
+"				up a forced query with the current buffer as the
+"				target: :BufDrop! %
 "	061	26-Jan-2013	ENH: Implement :BufDrop command that takes
 "				either an existing buffer number or name.
 "				Delegate to s:DropSingleFile() for buffers
@@ -584,7 +592,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -600,16 +608,24 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	" front, and remove the superfluous equivalent edit action.
 	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
     endif
+    if a:isInBuffer
+	call remove(l:actions, 0)
+    endif
     call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
-	call insert(l:actions, '&view', 1)
-	call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
+	if ! a:isInBuffer
+	    call insert(l:actions, '&view', 1)
+	endif
+	let l:previewIdx = index(l:actions, '&preview')
+	if l:previewIdx != -1
+	    call insert(l:actions, 'sho&w', l:previewIdx + 1)
+	endif
 	call add(l:actions, '&readonly and ask again')
     endif
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
-    if ! a:isNonexisting && ! a:isBlankWindow
+    if ! a:isNonexisting && ! a:isBlankWindow && ! a:isInBuffer
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
     if a:isBlankWindow
@@ -618,7 +634,10 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
     endif
-    if &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && a:isVisibleWindow
+	call insert(l:actions, '&goto window')
+    endif
+    if ! a:isInBuffer && &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
 
@@ -671,7 +690,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...')]
@@ -680,19 +699,28 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isOpenInAnotherTab
 	" front, and remove the superfluous equivalent edit action.
 	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
     endif
-    call insert(l:actions, 'sho&w', index(l:actions, '&preview') + 1)
+    if a:isInBuffer
+	call remove(l:actions, 0)
+    endif
+    let l:previewIdx = index(l:actions, '&preview')
+    if l:previewIdx != -1
+	call insert(l:actions, 'sho&w', l:previewIdx + 1)
+    endif
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
-    else
+    elseif ! a:isInBuffer
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
     endif
-    if &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && a:isVisibleWindow
+	call insert(l:actions, '&goto window')
+    endif
+    if ! a:isInBuffer && &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
 
@@ -806,7 +834,7 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
     endfor
 endfunction
 
-function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
+function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file.
@@ -815,6 +843,8 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
+"   a:isForceQuery  Flag whether to skip default actions and always query
+"		    instead.
 "   a:filespec	    Filespec of the dropped file.
 "   a:querytext	    Text to be presented to the user.
 "   a:fileOptionsAndCommands	String containing all optional file options and
@@ -830,17 +860,27 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
     let l:isMovedAway = 0
+    let l:isVisibleWindow = s:IsVisibleWindow(a:filespec)
     let l:tabPageNr = s:GetTabPageNr(bufnr(escapings#bufnameescape(a:filespec)))
-    if s:IsEmptyTabPage() && l:tabPageNr == -1
+    if ! a:isForceQuery && s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
-    elseif s:IsVisibleWindow(a:filespec)
-	let l:dropAction = 'goto'
+    elseif ! a:isForceQuery && l:isVisibleWindow
+	let l:dropAction = 'goto window'
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
 	let l:hasOtherBuffers = s:HasOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
+	let l:isInBuffer = (bufnr(escapings#bufnameescape(a:filespec)) == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
-	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(a:querytext, l:isNonexisting, l:hasOtherBuffers, (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
+	\   (l:isInBuffer ? substitute(a:querytext, '^Action for ', '&this buffer ', '') : a:querytext),
+	\   l:isNonexisting,
+	\   l:hasOtherBuffers,
+	\   l:isVisibleWindow,
+	\   l:isInBuffer,
+	\   (l:tabPageNr != -1),
+	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr())
+	\)
     endif
 
     try
@@ -959,7 +999,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 		setlocal readonly
 	    endif
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
-	elseif l:dropAction ==# 'goto'
+	elseif l:dropAction ==# 'goto window'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
@@ -989,7 +1029,7 @@ function! s:DropSingleFile( filespec, querytext, fileOptionsAndCommands )
 	call ingo#msg#VimExceptionMsg()
     endtry
 endfunction
-function! DropQuery#Drop( filePatternsString )
+function! DropQuery#Drop( isForceQuery, filePatternsString )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
     let l:filePatterns = ingofileargs#SplitAndUnescapeArguments(a:filePatternsString)
     if empty(l:filePatterns)
@@ -1006,7 +1046,7 @@ function! DropQuery#Drop( filePatternsString )
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
 	return
     elseif l:statistics.files == 1
-	call s:DropSingleFile(l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
+	call s:DropSingleFile(a:isForceQuery, l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
 	return
     endif
 
@@ -1102,7 +1142,7 @@ function! DropQuery#Drop( filePatternsString )
 	call ingo#msg#VimExceptionMsg()
     endtry
 endfunction
-function! DropQuery#DropBuffer( bufNr, ... )
+function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped buffer number.
@@ -1111,11 +1151,14 @@ function! DropQuery#DropBuffer( bufNr, ... )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
+"   a:isForceQuery  Flag whether to skip default actions and always query
 "   a:bufNr Number of existing buffer.
+"   a:1     Buffer name argument alternative over a:bufNr. Takes precedence over
+"	    it.
 "* RETURN VALUES:
 "   none
 "*******************************************************************************
-    let l:bufNr = (a:0 ? bufnr(a:1) : a:bufNr)
+    let l:bufNr = (a:0 ? bufnr(a:1) : (a:bufNr == 0 ? bufnr('') : a:bufNr))
     if ! bufexists(l:bufNr)
 	call ingo#msg#ErrorMsg('No such buffer: ' . (a:0 ? a:1 : a:bufNr))
 	return
@@ -1125,19 +1168,31 @@ function! DropQuery#DropBuffer( bufNr, ... )
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
     let l:isMovedAway = 0
+    let l:isForceQuery = (a:isForceQuery || l:bufNr == l:originalBufNr)
+    let l:isVisibleWindow = (bufwinnr(l:bufNr) != -1)
     let l:tabPageNr = s:GetTabPageNr(l:bufNr)
-    if s:IsEmptyTabPage() && l:tabPageNr == -1
+    if ! l:isForceQuery && s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
-    elseif bufwinnr(l:bufNr) != -1
-	let l:dropAction = 'goto'
+    elseif ! l:isForceQuery && l:isVisibleWindow
+	let l:dropAction = 'goto window'
     elseif ! empty(filereadable(l:bufName))
-	call s:DropSingleFile(l:bufName, printf('Action for %s?', l:bufName), '')
-	return
+	return s:DropSingleFile(l:isForceQuery, l:bufName, printf('Action for %s?', l:bufName), '')
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
+	let l:isInBuffer = (l:bufNr == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
-	let l:querytext = printf('Action for dropped buffer #%d%s?', l:bufNr, (empty(l:bufName) ? '' : ': ' . l:bufName))
-	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext, s:HasOtherBuffers(l:bufNr), (l:tabPageNr != -1), (l:blankWindowNr != -1 && l:blankWindowNr != winnr()))
+	let l:querytext = printf('Action for %s buffer #%d%s?',
+	\   (l:isInBuffer ? 'this' : 'dropped'),
+	\   l:bufNr,
+	\   (empty(l:bufName) ? '' : ': ' . l:bufName)
+	\)
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext,
+	\   s:HasOtherBuffers(l:bufNr),
+	\   l:isVisibleWindow,
+	\   l:isInBuffer,
+	\   (l:tabPageNr != -1),
+	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr())
+	\)
     endif
 
     try
@@ -1205,7 +1260,7 @@ function! DropQuery#DropBuffer( bufNr, ... )
 		execute l:blankWindowNr . 'wincmd w'
 		execute 'confirm buffer' l:bufNr
 	    endif
-	elseif l:dropAction ==# 'goto'
+	elseif l:dropAction ==# 'goto window'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    execute bufwinnr(l:bufNr) . 'wincmd w'
@@ -1225,4 +1280,6 @@ function! DropQuery#DropBuffer( bufNr, ... )
     endtry
 endfunction
 
+let &cpo = s:save_cpo
+unlet s:save_cpo
 " vim: set ts=8 sts=4 sw=4 noexpandtab ff=unix fdm=syntax :
