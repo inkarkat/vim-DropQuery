@@ -4,6 +4,7 @@
 "
 " DEPENDENCIES:
 "   - ingo/msg.vim autoload script
+"   - ingo/external.vim autoload script
 "   - escapings.vim autoload script
 "   - ingoactions.vim autoload script
 "   - ingofileargs.vim autoload script
@@ -14,6 +15,18 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	063	28-Jan-2013	ENH: Re-introduce "new GVIM" action for dropped
+"				buffers. Transfer the buffer contents via a temp
+"				file to the new Vim instance, and remove the
+"				buffer here.
+"				FIX: Add missing "goto tab" action for dropped
+"				buffers.
+"				Unload existing unmodified buffers when dropping
+"				file(s) to a "new GVIM" action to avoid a swap
+"				file warning in the new instance, and print a
+"				warning for modified buffers.
+"				FIX: Pass the full absolute filespec to "new
+"				GVIM" instance; the CWD may be different.
 "	062	27-Jan-2013	ENH: Allow forced query with [!]. Check for
 "				current buffer already containing the dropped
 "				target and omit senseless actions like "goto
@@ -480,14 +493,13 @@ endfunction
 function! s:ShortenFilespec( filespec )
     return fnamemodify(a:filespec, ':~:.')
 endfunction
-function! s:ExternalGvim( commands )
-    let l:exCommandForExternalGvim = (has('win32') || has('win64') ? 'silent !start gvim' : 'silent ! gvim')
-    execute l:exCommandForExternalGvim join(map(a:commands, '"-c " . escapings#shellescape(v:val, 1)'))
-endfunction
 function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
 "   Opens each filespec in a:filespecs in an external GVIM.
+"   Unmodified filespecs that are already open in this instance are unloaded to
+"   avoid a swap file warning in the new instance. For modified buffers, a
+"   warning is printed.
 "* ASSUMPTIONS / PRECONDITIONS:
 "	? List of any external variable, control, or other element whose state affects this procedure.
 "* EFFECTS / POSTCONDITIONS:
@@ -499,11 +511,27 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "   none
 "*******************************************************************************
     for l:filespec in a:filespecs
+	" Use the full absolute filespec; the new GVIM instance may have a
+	" different CWD. Resolve this before the :bdelete command may change our
+	" CWD.
+	let l:command = a:openCommand . ' ' . escapings#fnameescape(fnamemodify(l:filespec, ':p'))
+
+	let l:existingBufNr = bufnr(escapings#bufnameescape(l:filespec))
+	if l:existingBufNr != -1
+	    try
+		execute l:existingBufNr . 'bdelete'
+	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
+		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
+	    catch /^Vim\%((\a\+)\)\=:E/
+		call ingo#msg#ExceptionMsg()
+	    endtry
+	endif
+
 	" Simply passing the file as an argument to GVIM would add the file to
 	" the argument list. We're using an explicit a:openCommand instead.
 	" Bonus: With this, special handling of the 'readonly' attribute (-R
 	" argument) is avoided.
-	call s:ExternalGvim([a:openCommand . ' ' . escapings#fnameescape(s:ShortenFilespec(l:filespec))])
+	call ingo#external#LaunchGvim([l:command])
     endfor
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ... )
@@ -1283,22 +1311,26 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	elseif l:dropAction ==# 'new GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
-	    let l:tempFilespec = tempname()
 	    let l:bufContents = getbufline(l:bufNr, 1, '$')
 	    if getbufvar(l:bufNr, '&fileformat') ==# 'dos'
 		call map(l:bufContents, 'v:val . "\r"')
 	    endif
 
+	    let l:tempFilespec = tempname()
 	    if writefile(l:bufContents, l:tempFilespec) == -1
 		call ingo#msg#ErrorMsg('Write of transfer temp file failed: ' . l:tempFilespec)
 		return
 	    endif
 
-	    call s:ExternalGvim([
+	    " Forcibly unload the buffer from this Vim instance; it does not
+	    " make sense to edit the same buffer in two different instances.
+	    silent! execute l:bufNr . 'bdelete!'
+
+	    call ingo#external#LaunchGvim([
 	    \   'edit ' . escapings#fnameescape(l:tempFilespec),
 	    \   'chdir ' . escapings#fnameescape(getcwd()),
 	    \   (empty(l:bufName) ? '0file' : 'file ' . escapings#fnameescape(fnamemodify(l:bufName, ':p'))),
-	    \   printf('call delete(%s)',  string(l:tempFilespec))
+	    \   printf('if line2byte(line(''$'') + 1) > 0 | setl modified | call delete(%s) | endif',  string(l:tempFilespec))
 	    \])
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright sbuffer' l:bufNr
