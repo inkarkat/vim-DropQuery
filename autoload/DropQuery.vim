@@ -27,6 +27,8 @@
 "				warning for modified buffers.
 "				FIX: Pass the full absolute filespec to "new
 "				GVIM" instance; the CWD may be different.
+"				FIX: Handle file options or commands separated
+"				by multiple whitespace.
 "	062	27-Jan-2013	ENH: Allow forced query with [!]. Check for
 "				current buffer already containing the dropped
 "				target and omit senseless actions like "goto
@@ -850,7 +852,7 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 "******************************************************************************
     " The individual file options / commands are space-delimited, but spaces can
     " be escaped via backslash.
-    for l:fileOptionOrCommand in split(a:fileOptionsAndCommands, '\%(\%(^\|[^\\]\)\%(\\\\\)*\\\)\@<! ')
+    for l:fileOptionOrCommand in split(a:fileOptionsAndCommands, '\%(\%(^\|[^\\]\)\%(\\\\\)*\\\)\@<!\s\+')
 	if l:fileOptionOrCommand =~# '^++\%(ff\|fileformat\)=' || l:fileOptionOrCommand =~# '^++\%(no\)\?\%(bin\|binary\)$'
 	    execute 'setlocal' . l:fileOptionOrCommand[2:]
 	elseif l:fileOptionOrCommand =~# '^++'
