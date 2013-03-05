@@ -23,6 +23,9 @@
 "				as tabs.
 "				After "new tab", :redraw! to have the new blank
 "				tab page visible before re-querying.
+"				Rename "new GVIM" action to "external GVIM" and
+"				use the "n" accellerator to also offer "new tab"
+"				when there are already multiple tab pages.
 "	063	28-Jan-2013	ENH: Re-introduce "new GVIM" action for dropped
 "				buffers. Transfer the buffer contents via a temp
 "				file to the new Vim instance, and remove the
@@ -642,7 +645,10 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), '&new GVIM']
+    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', '&new tab', 'e&xternal GVIM']
+    if tabpagenr('$') > 1
+	call insert(l:actions, '&tab...', -1)
+    endif
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
@@ -685,7 +691,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
 	if l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
-	    call filter(l:actions, 'v:val !~# "readonly"')
+	    call filter(l:actions, 'v:val !~# "^.\\?readonly"')
 	else
 	    break
 	endif
@@ -698,7 +704,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new tab', '&new GVIM', 'open new &tab and ask again', '&readonly and ask again']
+    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new tab', 'e&xternal GVIM', 'open new &tab and ask again', '&readonly and ask again']
     if s:HasOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -734,7 +740,7 @@ endfunction
 function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
-    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), '&new GVIM']
+    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), 'e&xternal GVIM']
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
@@ -1055,7 +1061,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the filespec.
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
-	elseif l:dropAction ==# 'new GVIM'
+	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
@@ -1168,7 +1174,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
-	elseif l:dropAction ==# 'new GVIM'
+	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:filespecs )
@@ -1319,7 +1325,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    execute 'buffer' l:bufNr
-	elseif l:dropAction ==# 'new GVIM'
+	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    let l:bufContents = getbufline(l:bufNr, 1, '$')
