@@ -15,6 +15,14 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	064	06-Mar-2013	Change accellerator for multiple dropped files
+"				from "new tab" to "open new tab and ask again",
+"				as I mostly use that. Also remove "new tab"
+"				action when re-querying; hardly makes sense to
+"				have an empty tab page in between when appending
+"				as tabs.
+"				After "new tab", :redraw! to have the new blank
+"				tab page visible before re-querying.
 "	063	28-Jan-2013	ENH: Re-introduce "new GVIM" action for dropped
 "				buffers. Transfer the buffer contents via a temp
 "				file to the new Vim instance, and remove the
@@ -690,7 +698,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new &tab', '&new GVIM', '&open new tab and ask again', '&readonly and ask again']
+    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new tab', '&new GVIM', 'open new &tab and ask again', '&readonly and ask again']
     if s:HasOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -708,13 +716,14 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
 	if l:dropAction ==# 'open new tab and ask again'
 	    execute tabpagenr('$') . 'tabnew'
-	    call filter(l:actions, 'v:val !~# "open new tab"')
+	    redraw! " Without this, the new blank tab page isn't visible.
+	    call filter(l:actions, 'v:val !~# "^.\\?open .\\?new .\\?tab\\|^.\\?new .\\?tab"')
 	elseif l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
-	    call filter(l:actions, 'v:val !~# "readonly"')
+	    call filter(l:actions, 'v:val !~# "^.\\?readonly"')
 	elseif l:dropAction ==# 'fresh and ask again'
 	    let l:dropAttributes.fresh = 1
-	    call filter(l:actions, 'v:val !~# "fresh" && v:val !~# "argadd"')
+	    call filter(l:actions, 'v:val !~# "^.\\?fresh\\|^.\\?argadd"')
 	else
 	    break
 	endif
