@@ -525,7 +525,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
 		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
 	    catch /^Vim\%((\a\+)\)\=:E/
-		call ingo#msg#ExceptionMsg()
+		call ingo#msg#VimExceptionMsg()
 	    endtry
 	endif
 
