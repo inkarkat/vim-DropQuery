@@ -645,8 +645,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', '&new tab', 'e&xternal GVIM']
-    if tabpagenr('$') > 1
+    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM']
+    if tabpagenr('$') == 1
+	call insert(l:actions, 'new &tab', -1)
+    else
+	call insert(l:actions, '&new tab', -1)
 	call insert(l:actions, '&tab...', -1)
     endif
     if &l:previewwindow
