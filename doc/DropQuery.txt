@@ -33,9 +33,15 @@ RELATED WORKS								     *
 ==============================================================================
 USAGE							     *DropQuery-usage*
 								       *:Drop*
-:Drop [++opt] [+cmd] {file} ...
-			Automatically locate the visible {file}, use the empty
-			tab page for it, or ask where to open {file}.
+:Drop[!] [++opt] [+cmd] {file} ...
+			Automatically locate the visible {file}, use an empty
+			window for it, or ask where to open {file}. With [!],
+			always ask.
+
+:[N]BufDrop[!] [N]	Automatically locate the visible buffer [N] / for
+:BufDrop[!] {bufname}	{bufname}, use an empty window for it, or ask where to
+			open it. With [!], or when the current buffer is
+			specified, always ask.
 
 ==============================================================================
 INSTALLATION					      *DropQuery-installation*
