@@ -15,6 +15,15 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	065	15-Mar-2013	CHG: Stay in the preview window, as the user
+"				probably wants to navigate in the opened file.
+"				XXX: :pedit uses the CWD of the preview window.
+"				If that already contains a file with another
+"				CWD, the shortened command is wrong. Always use
+"				the absolute filespec.
+"				FIX: For "tabnr" and "use blank window", must
+"				save and use the absolute filespec, as that is
+"				not necessarily passed to the :Drop command.
 "	064	06-Mar-2013	Change accellerator for multiple dropped files
 "				from "new tab" to "open new tab and ask again",
 "				as I mostly use that. Also remove "new tab"
@@ -834,14 +843,6 @@ function! s:RestoreMove( isMovedAway, originalWinNr )
 	execute a:originalWinNr . 'wincmd w'
     endif
 endfunction
-function! s:PreviewBufNr()
-    for l:winnr in range(1, winnr('$'))
-	if getwinvar(l:winnr, '&previewwindow')
-	    return winbufnr(l:winnr)
-	endif
-    endfor
-    return -1
-endfunction
 function! s:HorizontalSplitModifier()
     if ingowindow#IsQuickfixList(1) == 1
 	" The quickfix list (but not a location list) should remain at the
@@ -958,18 +959,16 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    " The :pedit command does not go to the preview window, so the check
-	    " for a change in the previewed buffer and the setting of the
-	    " attributes has to be done differently.
-	    let l:originalPreviewBufNr = s:PreviewBufNr()
-	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands l:exfilespec
+	    " XXX: :pedit uses the CWD of the preview window. If that already
+	    " contains a file with another CWD, the shortened command is wrong.
+	    " Always use the absolute filespec.
+	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
+	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands escapings#fnameescape(l:absoluteFilespec)
+	    " The :pedit command does not go to the preview window itself, but
+	    " the user probably wants to navigate in there.
+	    wincmd P
 	    if l:dropAttributes.readonly
-		let l:newPreviewBufNr = s:PreviewBufNr()
-		if l:newPreviewBufNr != l:originalPreviewBufNr
-		    call setbufvar(l:newPreviewBufNr, '&readonly', 1)
-		endif
+		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' l:exFileOptionsAndCommands l:exfilespec
@@ -1016,13 +1015,14 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    endif
 	elseif l:dropAction ==# 'tabnr'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
 
 	    execute 'tabnext' l:dropAttributes.tabnr
 
 	    " Note: Do not use the shortened l:exfilespec here, the :tabnext may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
-	    " re-shorten the filespec.
-	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	    " re-shorten the absolute filespec.
+	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(l:absoluteFilespec))
 
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
@@ -1058,12 +1058,13 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'use blank window'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
-	    " re-shorten the filespec.
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	    " re-shorten the absolute filespec.
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(l:absoluteFilespec))
 	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
