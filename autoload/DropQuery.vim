@@ -21,9 +21,16 @@
 "				If that already contains a file with another
 "				CWD, the shortened command is wrong. Always use
 "				the absolute filespec.
-"				FIX: For "tabnr" and "use blank window", must
-"				save and use the absolute filespec, as that is
-"				not necessarily passed to the :Drop command.
+"				FIX: Expand all filespecs to full absolute
+"				paths. (Though when :Drop'ping files " from
+"				external tools like SendToGVIM, this is
+"				typically already done to " deal with different
+"				CWDs.) It's more precise to show the full path
+"				for a " (single) file in the query, and prevents
+"				problems with :set autochdir or " autocmds that
+"				change the CWD, especially when :split'ing
+"				multiple files or " commands that first move to
+"				a different window.
 "	064	06-Mar-2013	Change accellerator for multiple dropped files
 "				from "new tab" to "open new tab and ask again",
 "				as I mostly use that. Also remove "new tab"
@@ -315,7 +322,7 @@
 "				filespec for the external GVIM command is now
 "				double-quoted and processed through
 "				s:EscapeNormalFilespecForExCommand( s:ConvertExfilespecToNormalFilespec( filespec ) ).
-"				BF: In the :! ex command, the character '!' must
+"				BF: In the :! Ex command, the character '!' must
 "				also be escaped. (It stands for the previously
 "				executed :! command.) Now escaping [%#!] in
 "				s:EscapeNormalFilespecForExCommand().
@@ -528,16 +535,11 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
 "   a:openCommand   Ex command used to open each file in a:exfilespecs.
-"   a:filespecs	    List of filespecs.
+"   a:filespecs	    List of absolute filespecs.
 "* RETURN VALUES:
 "   none
 "*******************************************************************************
     for l:filespec in a:filespecs
-	" Use the full absolute filespec; the new GVIM instance may have a
-	" different CWD. Resolve this before the :bdelete command may change our
-	" CWD.
-	let l:command = a:openCommand . ' ' . escapings#fnameescape(fnamemodify(l:filespec, ':p'))
-
 	let l:existingBufNr = bufnr(escapings#bufnameescape(l:filespec))
 	if l:existingBufNr != -1
 	    try
@@ -549,11 +551,15 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 	    endtry
 	endif
 
+	" Note: Must use full absolute filespecs; the new GVIM instance may have
+	" a different CWD.
+	let l:externalCommand = a:openCommand . ' ' . escapings#fnameescape(l:filespec)
+
 	" Simply passing the file as an argument to GVIM would add the file to
 	" the argument list. We're using an explicit a:openCommand instead.
 	" Bonus: With this, special handling of the 'readonly' attribute (-R
 	" argument) is avoided.
-	call ingo#external#LaunchGvim([l:command])
+	call ingo#external#LaunchGvim([l:externalCommand])
     endfor
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ... )
@@ -565,12 +571,12 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ...
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:excommand		    ex command which will be invoked with each filespec.
-"   a:specialFirstExcommand ex command which will be invoked for the first filespec.
+"   a:excommand		    Ex command which will be invoked with each filespec.
+"   a:specialFirstExcommand Ex command which will be invoked for the first filespec.
 "			    If empty, the a:excommand will be invoked for the
 "			    first filespec just like any other.
 "   a:filespecs		    List of filespecs.
-"   a:afterExcommand	    Optional ex command which will be invoked after
+"   a:afterExcommand	    Optional Ex command which will be invoked after
 "			    opening the file via a:excommand.
 "* RETURN VALUES:
 "   none
@@ -597,7 +603,7 @@ function! s:ExecuteWithoutWildignore( excommand, filespecs )
 "* EFFECTS / POSTCONDITIONS:
 "	? List of the procedure's effect on each external variable, control, or other element.
 "* INPUTS:
-"   a:excommand	    ex command to be invoked
+"   a:excommand	    Ex command to be invoked
 "   a:filespecs	    List of filespecs.
 "* RETURN VALUES:
 "   none
@@ -896,7 +902,8 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "* INPUTS:
 "   a:isForceQuery  Flag whether to skip default actions and always query
 "		    instead.
-"   a:filespec	    Filespec of the dropped file.
+"   a:filespec	    Filespec of the dropped file. It is already expanded to an
+"		    absolute path by DropQuery#Drop().
 "   a:querytext	    Text to be presented to the user.
 "   a:fileOptionsAndCommands	String containing all optional file options and
 "				commands.
@@ -962,8 +969,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " XXX: :pedit uses the CWD of the preview window. If that already
 	    " contains a file with another CWD, the shortened command is wrong.
 	    " Always use the absolute filespec.
-	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
-	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands escapings#fnameescape(l:absoluteFilespec)
+	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands escapings#fnameescape(a:filespec)
 	    " The :pedit command does not go to the preview window itself, but
 	    " the user probably wants to navigate in there.
 	    wincmd P
@@ -1015,14 +1021,13 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    endif
 	elseif l:dropAction ==# 'tabnr'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
 
 	    execute 'tabnext' l:dropAttributes.tabnr
 
 	    " Note: Do not use the shortened l:exfilespec here, the :tabnext may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the absolute filespec.
-	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(l:absoluteFilespec))
+	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
 
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
@@ -1058,13 +1063,12 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'use blank window'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-	    let l:absoluteFilespec = fnamemodify(a:filespec, ':p')
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the absolute filespec.
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(l:absoluteFilespec))
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
 	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1093,6 +1097,15 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
     let [l:filespecs, l:statistics] = ingofileargs#ResolveGlobs(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:filespecs)
+
+    " Expand all filespecs to full absolute paths. (Though when :Drop'ping files
+    " from external tools like SendToGVIM, this is typically already done to
+    " deal with different CWDs.) It's more precise to show the full path for a
+    " (single) file in the query, and prevents problems with :set autochdir or
+    " autocmds that change the CWD, especially when :split'ing multiple files or
+    " commands that first move to a different window.
+    call map(l:filespecs, 'fnamemodify(v:val, ":p")')
+
     if empty(l:filespecs)
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
 	return
