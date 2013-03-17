@@ -15,6 +15,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	066	18-Mar-2013	CHG: Move "show" accelerator from "w" to "h",
+"				and "view" accelerator from "v" to "i";
+"				reinstate "v" accelerator for "vsplit".
 "	065	15-Mar-2013	CHG: Stay in the preview window, as the user
 "				probably wants to navigate in the opened file.
 "				XXX: :pedit uses the CWD of the preview window.
@@ -31,7 +34,7 @@
 "				change the CWD, especially when :split'ing
 "				multiple files or " commands that first move to
 "				a different window.
-"	064	06-Mar-2013	Change accellerator for multiple dropped files
+"	064	06-Mar-2013	Change accelerator for multiple dropped files
 "				from "new tab" to "open new tab and ask again",
 "				as I mostly use that. Also remove "new tab"
 "				action when re-querying; hardly makes sense to
@@ -40,7 +43,7 @@
 "				After "new tab", :redraw! to have the new blank
 "				tab page visible before re-querying.
 "				Rename "new GVIM" action to "external GVIM" and
-"				use the "n" accellerator to also offer "new tab"
+"				use the "n" accelerator to also offer "new tab"
 "				when there are already multiple tab pages.
 "	063	28-Jan-2013	ENH: Re-introduce "new GVIM" action for dropped
 "				buffers. Transfer the buffer contents via a temp
@@ -660,7 +663,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', 'vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM']
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM']
     if tabpagenr('$') == 1
 	call insert(l:actions, 'new &tab', -1)
     else
@@ -678,11 +681,11 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
 	if ! a:isInBuffer
-	    call insert(l:actions, '&view', 1)
+	    call insert(l:actions, 'v&iew', 1)
 	endif
 	let l:previewIdx = index(l:actions, '&preview')
 	if l:previewIdx != -1
-	    call insert(l:actions, 'sho&w', l:previewIdx + 1)
+	    call insert(l:actions, 's&how', l:previewIdx + 1)
 	endif
 	call add(l:actions, '&readonly and ask again')
     endif
@@ -722,7 +725,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 'sho&w', 'new tab', 'e&xternal GVIM', 'open new &tab and ask again', '&readonly and ask again']
+    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'new tab', 'e&xternal GVIM', 'open new &tab and ask again', '&readonly and ask again']
     if s:HasOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -733,7 +736,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     " Avoid "E36: Not enough room" when trying to open more splits than
     " possible.
-    if a:fileNum > &lines   | call filter(l:actions, 'v:val !=# "&split" && v:val !=# "sho&w"')  | endif
+    if a:fileNum > &lines   | call filter(l:actions, 'v:val !=# "&split" && v:val !=# "s&how"')  | endif
     if a:fileNum > &columns | call filter(l:actions, 'v:val !=# "&vsplit"') | endif
 
     while 1
@@ -769,7 +772,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isVisibleWindow, i
     endif
     let l:previewIdx = index(l:actions, '&preview')
     if l:previewIdx != -1
-	call insert(l:actions, 'sho&w', l:previewIdx + 1)
+	call insert(l:actions, 's&how', l:previewIdx + 1)
     endif
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
