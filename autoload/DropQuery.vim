@@ -18,6 +18,8 @@
 "	066	18-Mar-2013	CHG: Move "show" accelerator from "w" to "h",
 "				and "view" accelerator from "v" to "i";
 "				reinstate "v" accelerator for "vsplit".
+"				ENH: Allow to select the target window via new
+"				"winnr" and "placement" actions.
 "	065	15-Mar-2013	CHG: Stay in the preview window, as the user
 "				probably wants to navigate in the opened file.
 "				XXX: :pedit uses the CWD of the preview window.
@@ -644,6 +646,27 @@ function! s:QueryActionForArguments( actions )
 	let a:actions[index(a:actions, '&argedit')] = 'argedit'
     endif
 endfunction
+function! s:QueryWindow( querytext, dropAttributes )
+    let l:actions = ['new &top', 'new &bottom', 'new &above', 'new &leftmost', 'new &rightmost'] +
+    \   map(range(1, winnr('$')), '(v:val < 10 ? "&" . v:val : v:val) . (v:val ==' . winnr() . '? " (current)" : "")')
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    if l:dropAction =~# '(current)$'
+	let l:dropAction = 'edit'
+    elseif l:dropAction =~# '^\d\+$'
+	let a:dropAttributes.winnr = l:dropAction
+	let l:dropAction = 'winnr'
+    elseif ! empty(l:dropAction)
+	let a:dropAttributes.placement = {
+	\   'new top': 'topleft',
+	\   'new bottom': 'botright',
+	\   'new above': 'aboveleft',
+	\   'new leftmost': 'aboveleft vertical',
+	\   'new rightmost': 'belowright vertical'
+	\}[l:dropAction]
+	let l:dropAction = 'placement'
+    endif
+    return l:dropAction
+endfunction
 function! s:QueryTab( querytext, dropAttributes )
     let l:actions = ['&new tab'] + map(range(1, tabpagenr('$')), 'v:val < 10 ? "&" . v:val : v:val')
     let l:dropAction = s:Query(a:querytext, l:actions, 1)
@@ -653,7 +676,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -664,6 +687,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM']
+    if a:hasOtherWindows
+	call insert(l:actions, '&window...', -1)
+    endif
     if tabpagenr('$') == 1
 	call insert(l:actions, 'new &tab', -1)
     else
@@ -717,6 +743,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	    break
 	endif
     endwhile
+    if l:dropAction ==# 'window...'
+	let l:dropAction = s:QueryWindow(a:querytext, l:dropAttributes)
+    endif
     if l:dropAction ==# 'tab...'
 	let l:dropAction = s:QueryTab(a:querytext, l:dropAttributes)
     endif
@@ -758,7 +787,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForBuffer( querytext, hasOtherBuffers, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), 'e&xternal GVIM']
@@ -931,12 +960,14 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
 	let l:hasOtherBuffers = s:HasOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
+	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:isInBuffer = (bufnr(escapings#bufnameescape(a:filespec)) == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
 	\   (l:isInBuffer ? substitute(a:querytext, '^Action for ', '&this buffer ', '') : a:querytext),
 	\   l:isNonexisting,
 	\   l:hasOtherBuffers,
+	\   l:hasOtherWindows,
 	\   l:isVisibleWindow,
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
@@ -966,6 +997,8 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') l:exFileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'placement'
+	    execute l:dropAttributes.placement (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
@@ -1015,6 +1048,15 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    if l:newBufNr < l:maxBufNr
 		execute printf('confirm silent! %d,%dbdelete', (l:newBufNr + 1), l:maxBufNr)
 	    endif
+	elseif l:dropAction ==# 'winnr'
+	    execute l:dropAttributes.winnr . 'wincmd w'
+
+	    " Note: Do not use the shortened l:exfilespec here, the window
+	    " change may have changed the CWD and thus invalidated the filespec.
+	    " Instead, re-shorten the absolute filespec.
+	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1247,6 +1289,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isInBuffer = (l:bufNr == bufnr(''))
+	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let l:querytext = printf('Action for %s buffer #%d%s?',
 	\   (l:isInBuffer ? 'this' : 'dropped'),
@@ -1255,6 +1298,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	\)
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext,
 	\   s:HasOtherBuffers(l:bufNr),
+	\   l:hasOtherWindows,
 	\   l:isVisibleWindow,
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
@@ -1282,6 +1326,8 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    execute s:HorizontalSplitModifier() 'sbuffer' l:bufNr
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright vertical sbuffer' l:bufNr
+	elseif l:dropAction ==# 'placement'
+	    execute l:dropAttributes.placement 'sbuffer' l:bufNr
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sbuffer' l:bufNr
 	elseif l:dropAction ==# 'preview'
@@ -1311,6 +1357,9 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    if l:bufNr < l:maxBufNr
 		execute printf('confirm silent! %d,%dbdelete', (l:bufNr + 1), l:maxBufNr)
 	    endif
+	elseif l:dropAction ==# 'winnr'
+	    execute l:dropAttributes.winnr . 'wincmd w'
+	    execute 'confirm buffer' l:bufNr
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
