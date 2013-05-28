@@ -5,16 +5,17 @@
 " DEPENDENCIES:
 "   - ingo/msg.vim autoload script
 "   - ingo/external.vim autoload script
+"   - ingo/window/quickfix.vim autoload script
 "   - escapings.vim autoload script
 "   - ingoactions.vim autoload script
 "   - ingofileargs.vim autoload script
-"   - ingowindow.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2013 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	067	08-Apr-2013	Move ingowindow.vim functions into ingo-library.
 "	066	18-Mar-2013	CHG: Move "show" accelerator from "w" to "h",
 "				and "view" accelerator from "v" to "i";
 "				reinstate "v" accelerator for "vsplit".
@@ -882,7 +883,7 @@ function! s:RestoreMove( isMovedAway, originalWinNr )
     endif
 endfunction
 function! s:HorizontalSplitModifier()
-    if ingowindow#IsQuickfixList(1) == 1
+    if ingo#window#quickfix#IsQuickfixList(1) == 1
 	" The quickfix list (but not a location list) should remain at the
 	" bottom of Vim.
 	return 'aboveleft'
@@ -1336,7 +1337,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    if &l:previewwindow
 		execute 'confirm buffer' l:bufNr
 	    else
-		call ingowindow#OpenPreview()
+		call ingo#window#preview#OpenPreview()
 		execute 'confirm buffer' l:bufNr
 		wincmd p
 	    endif
