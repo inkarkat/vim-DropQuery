@@ -3,6 +3,7 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " DEPENDENCIES:
+"   - ingo/buffer.vim autoload script
 "   - ingo/msg.vim autoload script
 "   - ingo/external.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
@@ -15,6 +16,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	068	29-May-2013	Extract s:IsBlankBuffer() and
+"				s:HasOtherBuffers() into ingo-library.
 "	067	08-Apr-2013	Move ingowindow.vim functions into ingo-library.
 "	066	18-Mar-2013	CHG: Move "show" accelerator from "w" to "h",
 "				and "view" accelerator from "v" to "i";
@@ -148,7 +151,7 @@
 "				work.
 "	049	05-Apr-2012	ENH: Add "fresh" option for multiple files, too.
 "				FIX: Correct condition for "fresh" option via
-"				s:HasOtherBuffers().
+"				ingo#buffer#ExistOtherBuffers().
 "				ENH: Change "new tab" button to "tab" button
 "				with follow-up 1, 2, new query when more than
 "				one tab is open.
@@ -388,16 +391,10 @@ function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
     return l:winNr != -1
 endfunction
-function! s:IsBlankBuffer( bufnr )
-    return (empty(bufname(a:bufnr)) &&
-    \ getbufvar(a:bufnr, '&modified') == 0 &&
-    \ empty(getbufvar(a:bufnr, '&buftype'))
-    \)
-endfunction
 function! s:IsEmptyTabPage()
     return (
     \	tabpagewinnr(tabpagenr(), '$') <= 1 &&
-    \	s:IsBlankBuffer(bufnr(''))
+    \	ingo#buffer#IsBlank(bufnr(''))
     \)
 endfunction
 function! s:GetBlankWindowNr()
@@ -418,7 +415,7 @@ function! s:GetBlankWindowNr()
     " Check all windows in the current tab page, starting (and thus preferring)
     " the current window.
     for l:winnr in insert(range(1, winnr('$')), winnr())
-	if s:IsBlankBuffer(winbufnr(l:winnr))
+	if ingo#buffer#IsBlank(winbufnr(l:winnr))
 	    return l:winnr
 	endif
     endfor
@@ -461,9 +458,6 @@ endfunction
 function! s:HasDiffWindow()
     let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
     return ! empty(l:diffedWinNrs)
-endfunction
-function! s:HasOtherBuffers( targetBufNr )
-    return ! empty(filter(range(1, bufnr('$')), 'buflisted(v:val) && v:val != a:targetBufNr'))
 endfunction
 
 function! s:SaveGuiOptions()
@@ -756,7 +750,7 @@ endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
     let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'new tab', 'e&xternal GVIM', 'open new &tab and ask again', '&readonly and ask again']
-    if s:HasOtherBuffers(-1)
+    if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
     call s:QueryActionForArguments(l:actions)
@@ -960,7 +954,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
-	let l:hasOtherBuffers = s:HasOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
+	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
 	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:isInBuffer = (bufnr(escapings#bufnameescape(a:filespec)) == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
@@ -1298,7 +1292,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	\   (empty(l:bufName) ? '' : ': ' . l:bufName)
 	\)
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForBuffer(l:querytext,
-	\   s:HasOtherBuffers(l:bufNr),
+	\   ingo#buffer#ExistOtherBuffers(l:bufNr),
 	\   l:hasOtherWindows,
 	\   l:isVisibleWindow,
 	\   l:isInBuffer,
