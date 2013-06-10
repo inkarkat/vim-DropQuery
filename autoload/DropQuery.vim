@@ -4,18 +4,20 @@
 "
 " DEPENDENCIES:
 "   - ingo/buffer.vim autoload script
+"   - ingo/cmdargs/file.vim autoload script
+"   - ingo/cmdargs/glob.vim autoload script
 "   - ingo/msg.vim autoload script
 "   - ingo/external.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
 "   - escapings.vim autoload script
 "   - ingoactions.vim autoload script
-"   - ingofileargs.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2013 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	069	01-Jun-2013	Move ingofileargs.vim into ingo-library.
 "	068	29-May-2013	Extract s:IsBlankBuffer() and
 "				s:HasOtherBuffers() into ingo-library.
 "	067	08-Apr-2013	Move ingowindow.vim functions into ingo-library.
@@ -1126,15 +1128,15 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 endfunction
 function! DropQuery#Drop( isForceQuery, filePatternsString )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
-    let l:filePatterns = ingofileargs#SplitAndUnescapeArguments(a:filePatternsString)
+    let l:filePatterns = ingo#cmdargs#file#SplitAndUnescape(a:filePatternsString)
     if empty(l:filePatterns)
 	throw 'Must pass at least one filespec / pattern!'
     endif
 
     " Strip off the optional ++opt +cmd file options and commands.
-    let [l:filePatterns, l:fileOptionsAndCommands] = ingofileargs#FilterFileOptionsAndCommands(l:filePatterns)
+    let [l:filePatterns, l:fileOptionsAndCommands] = ingo#cmdargs#file#FilterFileOptionsAndCommands(l:filePatterns)
 
-    let [l:filespecs, l:statistics] = ingofileargs#ResolveGlobs(l:filePatterns)
+    let [l:filespecs, l:statistics] = ingo#cmdargs#glob#Resolve(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
 "****D echomsg '****' string(l:filespecs)
 
