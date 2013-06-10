@@ -10,6 +10,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	062	27-Jan-2013	ENH: Allow forced query with [!].
 "	061	26-Jan-2013	ENH: Implement :BufDrop command that takes
 "				either an existing buffer number or name.
 "	060	25-Jan-2013	ENH: Move away from special windows (like the
@@ -306,9 +307,6 @@ if exists('g:loaded_DropQuery') || (v:version < 700)
 endif
 let g:loaded_DropQuery = 1
 
-let s:save_cpo = &cpo
-set cpo&vim
-
 "-- configuration -------------------------------------------------------------
 
 if ! exists('g:DropQuery_RemapDrop')
@@ -342,14 +340,12 @@ endif
 " arguments.
 " We do specify multiple arguments, so that file completion works for all
 " arguments.
-command! -nargs=+ -complete=file Drop call DropQuery#Drop(<q-args>)
+command! -bang -nargs=+ -complete=file Drop call DropQuery#Drop(<bang>0, <q-args>)
 
-command! -count=0 -nargs=? -complete=buffer BufDrop call DropQuery#DropBuffer(<count>, <f-args>)
+command! -bang -count=0 -nargs=? -complete=buffer BufDrop call DropQuery#DropBuffer(<bang>0, <count>, <f-args>)
 
 if g:DropQuery_RemapDrop
     cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos() - 1) =~# '^\s*drop$' ? 'Drop' : 'drop')
 endif
 
-let &cpo = s:save_cpo
-unlet s:save_cpo
 " vim: set ts=8 sts=4 sw=4 noexpandtab ff=unix fdm=syntax :
