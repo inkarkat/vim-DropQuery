@@ -17,6 +17,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"   	070	14-Jun-2013	Minor: Make substitute() robust against
+"				'ignorecase'.
 "	069	01-Jun-2013	Move ingofileargs.vim into ingo-library.
 "	068	29-May-2013	Extract s:IsBlankBuffer() and
 "				s:HasOtherBuffers() into ingo-library.
@@ -961,7 +963,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:isInBuffer = (bufnr(escapings#bufnameescape(a:filespec)) == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
-	\   (l:isInBuffer ? substitute(a:querytext, '^Action for ', '&this buffer ', '') : a:querytext),
+	\   (l:isInBuffer ? substitute(a:querytext, '^\CAction for ', '&this buffer ', '') : a:querytext),
 	\   l:isNonexisting,
 	\   l:hasOtherBuffers,
 	\   l:hasOtherWindows,
