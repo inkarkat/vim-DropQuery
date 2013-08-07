@@ -3,6 +3,7 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " DEPENDENCIES:
+"   - ingo/actions.vim autoload script
 "   - ingo/buffer.vim autoload script
 "   - ingo/cmdargs/file.vim autoload script
 "   - ingo/cmdargs/glob.vim autoload script
@@ -10,13 +11,15 @@
 "   - ingo/external.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
 "   - escapings.vim autoload script
-"   - ingoactions.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2013 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	071	03-Jul-2013	BUG: Invalid buffer drop action "open"; the
+"				correct name is "edit".
+"			    	Move ingoactions.vim into ingo-library.
 "   	070	14-Jun-2013	Minor: Make substitute() robust against
 "				'ignorecase'.
 "	069	01-Jun-2013	Move ingofileargs.vim into ingo-library.
@@ -789,7 +792,7 @@ endfunction
 function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
-    let l:actions = ['&open', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), 'e&xternal GVIM']
+    let l:actions = ['&edit', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), 'e&xternal GVIM']
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
@@ -830,7 +833,7 @@ endfunction
 
 function! s:IsMoveAway()
     for l:Predicate in g:DropQuery_MoveAwayPredicates
-	if ingoactions#EvaluateOrFunc(l:Predicate)
+	if ingo#actions#EvaluateOrFunc(l:Predicate)
 	    return 1
 	endif
 	unlet l:Predicate   " The type might change, avoid E706.
