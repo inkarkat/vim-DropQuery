@@ -468,6 +468,12 @@ function! s:HasDiffWindow()
     let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
     return ! empty(l:diffedWinNrs)
 endfunction
+function! s:GetOtherVims()
+    return filter(
+    \   split(serverlist(), '\n'),
+    \   'v:val !=# v:servername'
+    \)
+endfunction
 
 function! s:SaveGuiOptions()
     let l:savedGuiOptions = ''
@@ -539,9 +545,9 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "   avoid a swap file warning in the new instance. For modified buffers, a
 "   warning is printed.
 "* ASSUMPTIONS / PRECONDITIONS:
-"	? List of any external variable, control, or other element whose state affects this procedure.
+"   None.
 "* EFFECTS / POSTCONDITIONS:
-"	? List of the procedure's effect on each external variable, control, or other element.
+"   Launches one new GVIM instance per passed filespec.
 "* INPUTS:
 "   a:openCommand   Ex command used to open each file in a:exfilespecs.
 "   a:filespecs	    List of absolute filespecs.
@@ -570,6 +576,45 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 	" argument) is avoided.
 	call ingo#external#LaunchGvim([l:externalCommand])
     endfor
+endfunction
+function! s:OtherGvimForEachFile( servername, fileOptionsAndCommands, filespecs )
+"*******************************************************************************
+"* PURPOSE:
+"   Drops all a:filespecs in the remote GVIM that has a:servername.
+"   Unmodified filespecs that are already open in this instance are unloaded to
+"   avoid a swap file warning in the new instance. For modified buffers, a
+"   warning is printed.
+"* ASSUMPTIONS / PRECONDITIONS:
+"   A GVIM instance with a:servername exists.
+"* EFFECTS / POSTCONDITIONS:
+"   Sends :Drop command to external GVIM instance.
+"* INPUTS:
+"   a:servername    Name of the remote GVIM instance.
+"   a:fileOptionsAndCommands	String containing all optional file options and
+"				commands; can be empty.
+"   a:filespecs	    List of absolute filespecs.
+"* RETURN VALUES:
+"   none
+"*******************************************************************************
+    let l:externalCommand = "\<C-\>\<C-n>:Drop" . a:fileOptionsAndCommands
+    for l:filespec in a:filespecs
+	let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(l:filespec))
+	if l:existingBufNr != -1
+	    try
+		execute l:existingBufNr . 'bdelete'
+	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
+		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
+	    catch /^Vim\%((\a\+)\)\=:E/
+		call ingo#msg#VimExceptionMsg()
+	    endtry
+	endif
+
+	" Note: Must use full absolute filespecs; the new GVIM instance may have
+	" a different CWD.
+	let l:externalCommand .= ' ' . ingo#compat#fnameescape(l:filespec)
+    endfor
+
+    call remote_send(a:servername, l:externalCommand . "\<CR>")
 endfunction
 function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ... )
 "*******************************************************************************
@@ -650,6 +695,17 @@ function! s:QueryActionForArguments( actions )
 	let a:actions[index(a:actions, '&argedit')] = 'argedit'
     endif
 endfunction
+function! s:QueryOther( querytext, dropAttributes, otherVims )
+    let l:actions = ['&new GVIM'] + map(copy(a:otherVims), 'substitute(v:val, "^\\%(.*\\d\\)\\@!\\|\\d", "\\&&", "")')
+    let l:dropAction = s:Query(a:querytext, l:actions, 1)
+    if l:dropAction ==# 'new GVIM'
+	let l:dropAction = 'external GVIM'
+    else
+	let a:dropAttributes.servername = l:dropAction
+	let l:dropAction = 'other GVIM'
+    endif
+    return l:dropAction
+endfunction
 function! s:QueryWindow( querytext, dropAttributes )
     let l:actions = ['new &top', 'new &bottom', 'new &above', 'new &leftmost', 'new &rightmost'] +
     \   map(range(1, winnr('$')), '(v:val < 10 ? "&" . v:val : v:val) . (v:val ==' . winnr() . '? " (current)" : "")')
@@ -690,7 +746,8 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM']
+    let l:otherVims = s:GetOtherVims()
+    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
     if a:hasOtherWindows
 	call insert(l:actions, '&window...', -1)
     endif
@@ -747,6 +804,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	    break
 	endif
     endwhile
+    if l:dropAction ==# 'external GVIM...'
+	let l:dropAction = s:QueryOther(a:querytext, l:dropAttributes, l:otherVims)
+    endif
     if l:dropAction ==# 'window...'
 	let l:dropAction = s:QueryWindow(a:querytext, l:dropAttributes)
     endif
@@ -1122,7 +1182,12 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
-	    call s:ExternalGvimForEachFile( (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ] )
+	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ])
+	elseif l:dropAction ==# 'other GVIM'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+
+	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
+	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:fileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright split' l:exFileOptionsAndCommands l:exfilespec
 	    execute '$MoveChangesHere'
