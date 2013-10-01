@@ -7,16 +7,18 @@
 "   - ingo/buffer.vim autoload script
 "   - ingo/cmdargs/file.vim autoload script
 "   - ingo/cmdargs/glob.vim autoload script
+"   - ingo/compat.vim autoload script
 "   - ingo/msg.vim autoload script
+"   - ingo/escape/file.vim autoload script
 "   - ingo/external.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
-"   - escapings.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2013 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	072	08-Aug-2013	Move escapings.vim into ingo-library.
 "	071	03-Jul-2013	BUG: Invalid buffer drop action "open"; the
 "				correct name is "edit".
 "			    	Move ingoactions.vim into ingo-library.
@@ -395,7 +397,7 @@ let s:save_cpo = &cpo
 set cpo&vim
 
 function! s:IsVisibleWindow( filespec )
-    let l:winNr = bufwinnr(escapings#bufnameescape(a:filespec))
+    let l:winNr = bufwinnr(ingo#escape#file#bufnameescape(a:filespec))
     return l:winNr != -1
 endfunction
 function! s:IsEmptyTabPage()
@@ -547,7 +549,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "   none
 "*******************************************************************************
     for l:filespec in a:filespecs
-	let l:existingBufNr = bufnr(escapings#bufnameescape(l:filespec))
+	let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(l:filespec))
 	if l:existingBufNr != -1
 	    try
 		execute l:existingBufNr . 'bdelete'
@@ -560,7 +562,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 
 	" Note: Must use full absolute filespecs; the new GVIM instance may have
 	" a different CWD.
-	let l:externalCommand = a:openCommand . ' ' . escapings#fnameescape(l:filespec)
+	let l:externalCommand = a:openCommand . ' ' . ingo#compat#fnameescape(l:filespec)
 
 	" Simply passing the file as an argument to GVIM would add the file to
 	" the argument list. We're using an explicit a:openCommand instead.
@@ -591,7 +593,7 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ...
     let l:afterExcommand = (a:0 ? a:1 : '')
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
     for l:filespec in a:filespecs
-	execute l:excommand escapings#fnameescape(s:ShortenFilespec(l:filespec))
+	execute l:excommand ingo#compat#fnameescape(s:ShortenFilespec(l:filespec))
 	let l:excommand = a:excommand
 	if ! empty(l:afterExcommand)
 	    execute l:afterExcommand
@@ -618,7 +620,7 @@ function! s:ExecuteWithoutWildignore( excommand, filespecs )
     let l:save_wildignore = &wildignore
     set wildignore=
     try
-	execute a:excommand join(map(copy(a:filespecs), 'escapings#fnameescape(s:ShortenFilespec(v:val))'), ' ')
+	execute a:excommand join(map(copy(a:filespecs), 'ingo#compat#fnameescape(s:ShortenFilespec(v:val))'), ' ')
     finally
 	let &wildignore = l:save_wildignore
     endtry
@@ -945,7 +947,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "   none
 "*******************************************************************************
 "****D echomsg '**** Dropped filespec' string(a:filespec) 'options' string(a:fileOptionsAndCommands)
-    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+    let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
     let l:exFileOptionsAndCommands = escape(a:fileOptionsAndCommands, ' \')
     let l:dropAttributes = {'readonly': 0}
 
@@ -953,7 +955,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
     let l:originalWinNr = winnr()
     let l:isMovedAway = 0
     let l:isVisibleWindow = s:IsVisibleWindow(a:filespec)
-    let l:tabPageNr = s:GetTabPageNr(bufnr(escapings#bufnameescape(a:filespec)))
+    let l:tabPageNr = s:GetTabPageNr(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
     if ! a:isForceQuery && s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
     elseif ! a:isForceQuery && l:isVisibleWindow
@@ -961,9 +963,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isNonexisting = empty(filereadable(a:filespec))
-	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(escapings#bufnameescape(a:filespec)))
+	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
 	let l:hasOtherWindows = (winnr('$') > 1)
-	let l:isInBuffer = (bufnr(escapings#bufnameescape(a:filespec)) == bufnr(''))
+	let l:isInBuffer = (bufnr(ingo#escape#file#bufnameescape(a:filespec)) == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
 	\   (l:isInBuffer ? substitute(a:querytext, '^\CAction for ', '&this buffer ', '') : a:querytext),
@@ -1007,7 +1009,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " XXX: :pedit uses the CWD of the preview window. If that already
 	    " contains a file with another CWD, the shortened command is wrong.
 	    " Always use the absolute filespec.
-	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands escapings#fnameescape(a:filespec)
+	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands ingo#compat#fnameescape(a:filespec)
 	    " The :pedit command does not go to the preview window itself, but
 	    " the user probably wants to navigate in there.
 	    wincmd P
@@ -1056,7 +1058,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Note: Do not use the shortened l:exfilespec here, the window
 	    " change may have changed the CWD and thus invalidated the filespec.
 	    " Instead, re-shorten the absolute filespec.
-	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	    let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'new tab'
@@ -1074,7 +1076,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Note: Do not use the shortened l:exfilespec here, the :tabnext may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the absolute filespec.
-	    let l:exfilespec = escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	    let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
@@ -1091,7 +1093,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " argument list.
 	    " Instead, first go to the tab page, then activate the correct window.
 	    execute 'tabnext' l:tabPageNr
-	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
+	    execute bufwinnr(ingo#escape#file#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -1103,7 +1105,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file.
 	    "execute 'drop' l:exFileOptionsAndCommands l:exfilespec
-	    execute bufwinnr(escapings#bufnameescape(a:filespec)) . 'wincmd w'
+	    execute bufwinnr(ingo#escape#file#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -1115,7 +1117,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the absolute filespec.
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands escapings#fnameescape(s:ShortenFilespec(a:filespec))
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
@@ -1415,9 +1417,9 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    silent! execute l:bufNr . 'bdelete!'
 
 	    call ingo#external#LaunchGvim([
-	    \   'edit ' . escapings#fnameescape(l:tempFilespec),
-	    \   'chdir ' . escapings#fnameescape(getcwd()),
-	    \   (empty(l:bufName) ? '0file' : 'file ' . escapings#fnameescape(fnamemodify(l:bufName, ':p'))),
+	    \   'edit ' . ingo#compat#fnameescape(l:tempFilespec),
+	    \   'chdir ' . ingo#compat#fnameescape(getcwd()),
+	    \   (empty(l:bufName) ? '0file' : 'file ' . ingo#compat#fnameescape(fnamemodify(l:bufName, ':p'))),
 	    \   printf('if line2byte(line(''$'') + 1) > 0 | setl modified | call delete(%s) | endif',  string(l:tempFilespec))
 	    \])
 	elseif l:dropAction ==# 'move scratch contents there'
