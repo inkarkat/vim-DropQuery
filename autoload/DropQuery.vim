@@ -18,6 +18,15 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	073	02-Oct-2013	ENH: Add another query to "external GVIM" when
+"				there are other GVIM instances, and offer to
+"				open the file(s) in an existing instance.
+"				ENH: When dropping multiple files to "external
+"				GVIM", offer to :Drop all files in one new GVIM
+"				instance in addition to the existing opening
+"				each in a new instance. This probably makes more
+"				sense in most situations (though there may be
+"				use cases for the separate instances, too).
 "	072	08-Aug-2013	Move escapings.vim into ingo-library.
 "	071	03-Jul-2013	BUG: Invalid buffer drop action "open"; the
 "				correct name is "edit".
@@ -537,6 +546,18 @@ endfunction
 function! s:ShortenFilespec( filespec )
     return fnamemodify(a:filespec, ':~:.')
 endfunction
+function! s:BufDeleteExisting( filespec )
+    let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(a:filespec))
+    if l:existingBufNr != -1
+	try
+	    execute l:existingBufNr . 'bdelete'
+	catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
+	    call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
+	catch /^Vim\%((\a\+)\)\=:E/
+	    call ingo#msg#VimExceptionMsg()
+	endtry
+    endif
+endfunction
 function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "*******************************************************************************
 "* PURPOSE:
@@ -555,16 +576,7 @@ function! s:ExternalGvimForEachFile( openCommand, filespecs )
 "   none
 "*******************************************************************************
     for l:filespec in a:filespecs
-	let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(l:filespec))
-	if l:existingBufNr != -1
-	    try
-		execute l:existingBufNr . 'bdelete'
-	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
-		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
-	    catch /^Vim\%((\a\+)\)\=:E/
-		call ingo#msg#VimExceptionMsg()
-	    endtry
-	endif
+	call s:BufDeleteExisting(l:filespec)
 
 	" Note: Must use full absolute filespecs; the new GVIM instance may have
 	" a different CWD.
@@ -597,16 +609,7 @@ function! s:ExternalGvimForAllFiles( fileOptionsAndCommands, filespecs )
 "*******************************************************************************
     let l:externalCommand = 'Drop'
     for l:filespec in a:filespecs
-	let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(l:filespec))
-	if l:existingBufNr != -1
-	    try
-		execute l:existingBufNr . 'bdelete'
-	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
-		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
-	    catch /^Vim\%((\a\+)\)\=:E/
-		call ingo#msg#VimExceptionMsg()
-	    endtry
-	endif
+	call s:BufDeleteExisting(l:filespec)
 
 	" Note: Must use full absolute filespecs; the new GVIM instance may have
 	" a different CWD.
@@ -636,16 +639,7 @@ function! s:OtherGvimForEachFile( servername, fileOptionsAndCommands, filespecs 
 "*******************************************************************************
     let l:externalCommand = "\<C-\>\<C-n>:Drop" . a:fileOptionsAndCommands
     for l:filespec in a:filespecs
-	let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(l:filespec))
-	if l:existingBufNr != -1
-	    try
-		execute l:existingBufNr . 'bdelete'
-	    catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
-		call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
-	    catch /^Vim\%((\a\+)\)\=:E/
-		call ingo#msg#VimExceptionMsg()
-	    endtry
-	endif
+	call s:BufDeleteExisting(l:filespec)
 
 	" Note: Must use full absolute filespecs; the other GVIM instance may
 	" have a different CWD.
