@@ -18,6 +18,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	074	18-Nov-2013	ingo#buffer#IsBlank() now supports optional
+"				argument.
 "	073	02-Oct-2013	ENH: Add another query to "external GVIM" when
 "				there are other GVIM instances, and offer to
 "				open the file(s) in an existing instance.
@@ -412,7 +414,7 @@ endfunction
 function! s:IsEmptyTabPage()
     return (
     \	tabpagewinnr(tabpagenr(), '$') <= 1 &&
-    \	ingo#buffer#IsBlank(bufnr(''))
+    \	ingo#buffer#IsBlank()
     \)
 endfunction
 function! s:GetBlankWindowNr()
