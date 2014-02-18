@@ -9,15 +9,27 @@
 "   - ingo/cmdargs/glob.vim autoload script
 "   - ingo/compat.vim autoload script
 "   - ingo/msg.vim autoload script
+"   - ingo/escape.vim autoload script
 "   - ingo/escape/file.vim autoload script
 "   - ingo/external.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2013 Ingo Karkat
+" Copyright: (C) 2005-2014 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	075	11-Feb-2014	Correctly handle :Drop ++ff=dos +1 file command
+"				with multiple fileOptionsAndCommands. Requires
+"				changed
+"				ingo#cmdargs#file#FilterFileOptionsAndCommands()
+"				API that now returns a List.
+"				FIX: Also pass fileOptionsAndCommands to
+"				external GVIM; forgot to append the variable to
+"				the externalCommand.
+"				FIX: Missing whitespace when executing :setlocal
+"				command in s:ExecuteFileOptionsAndCommands().
+"				Use ingo#escape#Unescape() there.
 "	074	18-Nov-2013	ingo#buffer#IsBlank() now supports optional
 "				argument.
 "	073	02-Oct-2013	ENH: Add another query to "external GVIM" when
@@ -609,7 +621,7 @@ function! s:ExternalGvimForAllFiles( fileOptionsAndCommands, filespecs )
 "* RETURN VALUES:
 "   none
 "*******************************************************************************
-    let l:externalCommand = 'Drop'
+    let l:externalCommand = 'Drop' . a:fileOptionsAndCommands
     for l:filespec in a:filespecs
 	call s:BufDeleteExisting(l:filespec)
 
@@ -1010,21 +1022,19 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 "* EFFECTS / POSTCONDITIONS:
 "   None.
 "* INPUTS:
-"   a:fileOptionsAndCommands	String containing all optional file options and
+"   a:fileOptionsAndCommands	List containing all optional file options and
 "				commands; can be empty.
 "* RETURN VALUES:
 "   None.
 "******************************************************************************
-    " The individual file options / commands are space-delimited, but spaces can
-    " be escaped via backslash.
-    for l:fileOptionOrCommand in split(a:fileOptionsAndCommands, '\%(\%(^\|[^\\]\)\%(\\\\\)*\\\)\@<!\s\+')
+    for l:fileOptionOrCommand in a:fileOptionsAndCommands
 	if l:fileOptionOrCommand =~# '^++\%(ff\|fileformat\)=' || l:fileOptionOrCommand =~# '^++\%(no\)\?\%(bin\|binary\)$'
-	    execute 'setlocal' . l:fileOptionOrCommand[2:]
+	    execute 'setlocal' l:fileOptionOrCommand[2:]
 	elseif l:fileOptionOrCommand =~# '^++'
 	    " Cannot execute ++enc and ++bad outside of :edit; ++edit only
 	    " applies to :read.
 	elseif l:fileOptionOrCommand =~# '^+'
-	    execute substitute(l:fileOptionOrCommand[1:], '\\\([ \\]\)', '\1', 'g')
+	    execute ingo#escape#Unescape(l:fileOptionOrCommand[1:], '\ ')
 	else
 	    throw 'Invalid file option / command: ' . l:fileOptionOrCommand
 	endif
@@ -1045,16 +1055,17 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "   a:filespec	    Filespec of the dropped file. It is already expanded to an
 "		    absolute path by DropQuery#Drop().
 "   a:querytext	    Text to be presented to the user.
-"   a:fileOptionsAndCommands	String containing all optional file options and
+"   a:fileOptionsAndCommands	List containing all optional file options and
 "				commands.
 "* RETURN VALUES:
 "   none
 "*******************************************************************************
 "****D echomsg '**** Dropped filespec' string(a:filespec) 'options' string(a:fileOptionsAndCommands)
     let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
-    let l:exFileOptionsAndCommands = escape(a:fileOptionsAndCommands, ' \')
+    let l:exFileOptionsAndCommands = join(map(a:fileOptionsAndCommands, "escape(v:val, '\\ ')"))
+    let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
     let l:dropAttributes = {'readonly': 0}
-
+"****D echomsg '****' string(l:exFileOptionsAndCommands) string(l:exfilespec)
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
     let l:isMovedAway = 0
@@ -1088,9 +1099,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
-	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'view'
-	    execute 'confirm view' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'confirm view' . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'diff'
 	    if ! s:HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
@@ -1099,21 +1110,21 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    endif
 	    " Like :diffsplit, evaluate the 'diffopt' option to determine
 	    " whether to split horizontally or vertically.
-	    execute (&diffopt =~# 'vertical' ? 'belowright vertical' : s:HorizontalSplitModifier()) (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+	    execute (&diffopt =~# 'vertical' ? 'belowright vertical' : s:HorizontalSplitModifier()) (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
 	    diffthis
 	elseif l:dropAction ==# 'split'
-	    execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+	    execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
-	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') l:exFileOptionsAndCommands l:exfilespec
+	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'placement'
-	    execute l:dropAttributes.placement (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+	    execute l:dropAttributes.placement (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
-	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'call TopLeftHook() | topleft sview' . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    " XXX: :pedit uses the CWD of the preview window. If that already
 	    " contains a file with another CWD, the shortened command is wrong.
 	    " Always use the absolute filespec.
-	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' l:exFileOptionsAndCommands ingo#compat#fnameescape(a:filespec)
+	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' . l:exFileOptionsAndCommands ingo#compat#fnameescape(a:filespec)
 	    " The :pedit command does not go to the preview window itself, but
 	    " the user probably wants to navigate in there.
 	    wincmd P
@@ -1121,7 +1132,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argedit'
-	    execute 'confirm argedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'confirm argedit' . l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -1140,14 +1151,14 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
 	    "execute 'drop' l:exfilespec . '|only'
-	    execute (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec . '|only'
+	    execute (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec . '|only'
 	elseif l:dropAction ==# 'fresh'
 	    " Note: Taken from the implementation of :ZZ in ingocommands.vim.
 	    if argc() > 0
 		argdelete *
 	    endif
 
-	    execute (l:dropAttributes.readonly ? 'view!' : 'edit!') l:exFileOptionsAndCommands l:exfilespec
+	    execute (l:dropAttributes.readonly ? 'view!' : 'edit!') . l:exFileOptionsAndCommands l:exfilespec
 	    let l:newBufNr = bufnr('')
 	    let l:maxBufNr = bufnr('$')
 	    if l:newBufNr > 1
@@ -1164,11 +1175,11 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Instead, re-shorten the absolute filespec.
 	    let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 
-	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
-	    execute tabpagenr('$') . 'tabedit' l:exFileOptionsAndCommands l:exfilespec
+	    execute tabpagenr('$') . 'tabedit' . l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
@@ -1184,10 +1195,10 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 
 	    let l:blankWindowNr = s:GetBlankWindowNr()
 	    if l:blankWindowNr == -1
-		execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
+		execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
 	    else
 		execute l:blankWindowNr . 'wincmd w'
-		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	    endif
 	elseif l:dropAction ==# 'goto tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
@@ -1208,7 +1219,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
 	    " Do not use the :drop command to activate the window which contains the
 	    " dropped file.
-	    "execute 'drop' l:exFileOptionsAndCommands l:exfilespec
+	    "execute 'drop' . l:exFileOptionsAndCommands l:exfilespec
 	    execute bufwinnr(ingo#escape#file#bufnameescape(a:filespec)) . 'wincmd w'
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
@@ -1221,19 +1232,15 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
 	    " have changed the CWD and thus invalidated the filespec. Instead,
 	    " re-shorten the absolute filespec.
-	    execute (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
+	    execute (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
-	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, [ a:filespec ])
+	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'other GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    let l:fileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
-	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:fileOptionsAndCommands, [ a:filespec ])
+	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'move scratch contents there'
-	    execute 'belowright split' l:exFileOptionsAndCommands l:exfilespec
+	    execute 'belowright split' . l:exFileOptionsAndCommands l:exfilespec
 	    execute '$MoveChangesHere'
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
@@ -1276,7 +1283,8 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
     let l:isMovedAway = s:MoveAwayAndRefresh()
     let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
 
-    let l:fileOptionsAndCommands = (empty(l:fileOptionsAndCommands) ? '' : ' ' . l:fileOptionsAndCommands)
+    let l:exFileOptionsAndCommands = join(map(l:fileOptionsAndCommands, "escape(v:val, '\\ ')"))
+    let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
     try
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
@@ -1311,31 +1319,31 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	    " argument list as a courtesy.
 	    args
 	elseif l:dropAction ==# 'argedit'
-	    call s:ExecuteWithoutWildignore('confirm args' . l:fileOptionsAndCommands, l:filespecs)
+	    call s:ExecuteWithoutWildignore('confirm args' . l:exFileOptionsAndCommands, l:filespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'diff'
 	    call s:ExecuteForEachFile(
-	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
-	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
+	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs,
 	    \	'diffthis'
 	    \)
 	elseif l:dropAction ==# 'split'
 	    call s:ExecuteForEachFile(
-	    \	'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:fileOptionsAndCommands,
-	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
+	    \	'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'vsplit'
 	    call s:ExecuteForEachFile(
-	    \	'belowright ' . (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:fileOptionsAndCommands,
-	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
+	    \	'belowright ' . (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:exFileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'show'
 	    call s:ExecuteForEachFile(
-	    \	'call TopLeftHook() | topleft sview' . l:fileOptionsAndCommands,
-	    \	(s:IsEmptyTabPage() ? 'view' . l:fileOptionsAndCommands : ''),
+	    \	'call TopLeftHook() | topleft sview' . l:exFileOptionsAndCommands,
+	    \	(s:IsEmptyTabPage() ? 'view' . l:exFileOptionsAndCommands : ''),
 	    \	reverse(l:filespecs)
 	    \)
 	elseif l:dropAction ==# 'new tab'
@@ -1345,22 +1353,19 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	    " it, but the expression isn't reevaluated. Just use a very large
 	    " value to force adding as the last tab page for each one.
 	    call s:ExecuteForEachFile(
-	    \	'99999tabedit' . l:fileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
-	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands : ''),
+	    \	'99999tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
+	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'external GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:fileOptionsAndCommands, l:filespecs)
+	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands, l:filespecs)
 	elseif l:dropAction ==# 'external single GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    call s:ExternalGvimForAllFiles(l:fileOptionsAndCommands, l:filespecs)
+	    call s:ExternalGvimForAllFiles(l:exFileOptionsAndCommands, l:filespecs)
 	elseif l:dropAction ==# 'other GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
-
-	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:fileOptionsAndCommands, l:filespecs)
+	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, l:filespecs)
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
