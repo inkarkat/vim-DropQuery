@@ -19,6 +19,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	076	19-Feb-2014	FIX: Correct empty argument type to
+"				s:DropSingleFile() when dropping a buffer.
 "	075	11-Feb-2014	Correctly handle :Drop ++ff=dos +1 file command
 "				with multiple fileOptionsAndCommands. Requires
 "				changed
@@ -1411,7 +1413,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
     elseif ! l:isForceQuery && l:isVisibleWindow
 	let l:dropAction = 'goto window'
     elseif ! empty(filereadable(l:bufName))
-	return s:DropSingleFile(l:isForceQuery, l:bufName, printf('Action for %s?', l:bufName), '')
+	return s:DropSingleFile(l:isForceQuery, l:bufName, printf('Action for %s?', l:bufName), [])
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isInBuffer = (l:bufNr == bufnr(''))
