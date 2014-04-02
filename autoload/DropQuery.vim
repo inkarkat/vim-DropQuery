@@ -19,6 +19,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	077	26-Feb-2014	Allow both "&new tab" and "new &tab"
+"				accelerators when there's only a single tab
+"				page.
 "	076	19-Feb-2014	FIX: Correct empty argument type to
 "				s:DropSingleFile() when dropping a buffer.
 "	075	11-Feb-2014	Correctly handle :Drop ++ff=dos +1 file command
@@ -803,6 +806,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	call insert(l:actions, '&window...', -1)
     endif
     if tabpagenr('$') == 1
+	call insert(l:actions, '&new tab', -1)
 	call insert(l:actions, 'new &tab', -1)
     else
 	call insert(l:actions, '&new tab', -1)
