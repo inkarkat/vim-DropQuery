@@ -19,6 +19,11 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	078	03-Apr-2014	FIX: Avoid "E516: No buffers deleted" when
+"				opening in external GVIM and the dropped file
+"				has been unloaded already here. Need to check
+"				for the buffer being loaded, not just for its
+"				existence.
 "	077	26-Feb-2014	Allow both "&new tab" and "new &tab"
 "				accelerators when there's only a single tab
 "				page.
@@ -567,7 +572,7 @@ function! s:ShortenFilespec( filespec )
 endfunction
 function! s:BufDeleteExisting( filespec )
     let l:existingBufNr = bufnr(ingo#escape#file#bufnameescape(a:filespec))
-    if l:existingBufNr != -1
+    if l:existingBufNr != -1 && bufloaded(l:existingBufNr)
 	try
 	    execute l:existingBufNr . 'bdelete'
 	catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
