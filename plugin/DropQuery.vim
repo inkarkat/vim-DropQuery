@@ -186,7 +186,7 @@
 "				filespec returned from glob() with exfilespecs.
 "				Renamed ...InExSyntax to ex... to shorten
 "				identifiers names.
-"				Refactored special '!' escaping for :! ex
+"				Refactored special '!' escaping for :! Ex
 "				command.
 "				Reworked Escape...() functions.
 "				BF: Introduced s:ExecuteWithoutWildignore()
@@ -238,7 +238,7 @@
 "				intuitive, because you typically don't think
 "				about tab pages when dropping a file.
 "	024	04-Jun-2007	BF: Single file action "new GVIM" didn't work on
-"				Unix, because the filespec is passed in ex
+"				Unix, because the filespec is passed in Ex
 "				syntax (i.e. spaces escaped by backslashes),
 "				enclosed in double quotes. Thus, spaces were
 "				quoted/escaped twice. On Windows, however,
@@ -247,17 +247,17 @@
 "				filespec for the external GVIM command is now
 "				double-quoted and processed through
 "				s:EscapeNormalFilespecForExCommand( s:ConvertExfilespecToNormalFilespec( filespec ) ).
-"				BF: In the :! ex command, the character '!' must
+"				BF: In the :! Ex command, the character '!' must
 "				also be escaped. (It stands for the previously
 "				executed :! command.) Now escaping [%#!] in
 "				s:EscapeNormalFilespecForExCommand().
 "	0.23	14-Dec-2006	Added foreground() call to :sleep to hopefully
 "				achieve dialog focus on activation.
 "	0.22	28-Nov-2006	Removed limitation to 20 dropped files:
-"				Switched main filespec format from normal to ex
+"				Switched main filespec format from normal to Ex
 "				syntax; Vim commands and user display use
 "				s:ConvertExfilespecToNormalFilespec() to
-"				unescape the ex syntax; that was formerly done
+"				unescape the Ex syntax; that was formerly done
 "				by -complete=file.
 "				Multiple files are passed as one string
 "				(-nargs=1, and splitting is done inside the
@@ -323,7 +323,7 @@ endif
 
 "-- commands ------------------------------------------------------------------
 
-" The file pattern passed to :drop should conform to ex syntax, just as the
+" The file pattern passed to :drop should conform to Ex syntax, just as the
 " built-in :drop command would expect them:
 " - spaces, [%#] etc. are escaped with '\'
 " - no enclosing of filespecs in double quotes
