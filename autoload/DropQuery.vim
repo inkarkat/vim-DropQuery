@@ -577,7 +577,7 @@ function! s:BufDeleteExisting( filespec )
 	    execute l:existingBufNr . 'bdelete'
 	catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
 	    call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
-	catch /^Vim\%((\a\+)\)\=:E/
+	catch /^Vim\%((\a\+)\)\=:/
 	    call ingo#msg#VimExceptionMsg()
 	endtry
     endif
@@ -1256,7 +1256,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
-    catch /^Vim\%((\a\+)\)\=:E/
+    catch /^Vim\%((\a\+)\)\=:/
 	call ingo#msg#VimExceptionMsg()
     endtry
 endfunction
@@ -1384,7 +1384,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	if l:dropAttributes.fresh && empty(bufname(l:newBufNr))
 	    execute printf('silent! %dbdelete', l:newBufNr)
 	endif
-    catch /^Vim\%((\a\+)\)\=:E/
+    catch /^Vim\%((\a\+)\)\=:/
 	call ingo#msg#VimExceptionMsg()
     endtry
 endfunction
@@ -1569,7 +1569,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
-    catch /^Vim\%((\a\+)\)\=:E/
+    catch /^Vim\%((\a\+)\)\=:/
 	call ingo#msg#VimExceptionMsg()
     endtry
 endfunction
