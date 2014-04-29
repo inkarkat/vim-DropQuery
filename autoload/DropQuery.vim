@@ -8,6 +8,7 @@
 "   - ingo/cmdargs/file.vim autoload script
 "   - ingo/cmdargs/glob.vim autoload script
 "   - ingo/compat.vim autoload script
+"   - ingo/query.vim autoload script
 "   - ingo/msg.vim autoload script
 "   - ingo/escape.vim autoload script
 "   - ingo/escape/file.vim autoload script
@@ -19,6 +20,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	079	30-Apr-2014	Factor out s:Query() functionality to
+"				ingo#query#ConfirmAsText().
 "	078	03-Apr-2014	FIX: Avoid "E516: No buffers deleted" when
 "				opening in external GVIM and the dropped file
 "				has been unloaded already here. Need to check
@@ -553,17 +556,8 @@ function! s:Query( msg, choices, default )
 "   aborted.
 "*******************************************************************************
     let l:savedGuiOptions = s:SaveGuiOptions()
-
-    let l:plainChoices = map(copy(a:choices), 'substitute(v:val, "&", "", "g")')
-    let l:defaultIndex = (type(a:default) == type(0) ? a:default : max([index(l:plainChoices, a:default) + 1, 0]))
-    let l:choice = ''
-    let l:index = confirm(a:msg, join(a:choices, "\n"), l:defaultIndex, 'Question')
-    if l:index > 0
-	let l:choice = get(l:plainChoices, l:index - 1, '')
-    endif
-
+	let l:choice = ingo#query#ConfirmAsText(a:msg, a:choices, a:default, 'Question')
     call s:RestoreGuiOptions( l:savedGuiOptions )
-
     return l:choice
 endfunction
 
