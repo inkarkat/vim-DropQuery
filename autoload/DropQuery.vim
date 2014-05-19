@@ -22,6 +22,12 @@
 " REVISION	DATE		REMARKS
 "	079	30-Apr-2014	Factor out s:Query() functionality to
 "				ingo#query#ConfirmAsText().
+"				Bump sleep length to focus the popup from 200 ms
+"				to 300 ms as the old value didn't properly focus
+"				it at least on sake.
+"				Factor out the entire voodoo to a more amenable
+"				g:DropQuery_PopupFocusCommand configuration
+"				variable.
 "	078	03-Apr-2014	FIX: Avoid "E516: No buffers deleted" when
 "				opening in external GVIM and the dropped file
 "				has been unloaded already here. Need to check
@@ -519,16 +525,7 @@ function! s:SaveGuiOptions()
     endif
 
     if ! g:DropQuery_NoPopup
-	" Focus on the popup dialog requires that activation of Vim from the
-	" external call has been completed, so better wait a few milliseconds to
-	" avoid that Vim gets focus, but not Vim's popup dialog. This occurred
-	" on Windows XP.
-	" The sleep workaround still doesn't work all the time on Windows XP.
-	" I've empirically found out that I get better luck if foreground() is
-	" called before the delay, or maybe I'm just fooled once more.
-	" This whole stuff reminds me of witchcraft, not engineering :-)
-	call foreground()
-	sleep 200m
+	execute g:DropQuery_PopupFocusCommand
     endif
     return l:savedGuiOptions
 endfunction
