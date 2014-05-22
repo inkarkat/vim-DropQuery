@@ -20,6 +20,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	080	20-May-2014	Add "above" split choice.
 "	079	30-Apr-2014	Factor out s:Query() functionality to
 "				ingo#query#ConfirmAsText().
 "				Bump sleep length to focus the popup from 200 ms
@@ -797,7 +798,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:otherVims = s:GetOtherVims()
-    let l:actions = [l:editAction, '&split', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
+    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
     if a:hasOtherWindows
 	call insert(l:actions, '&window...', -1)
     endif
@@ -1116,6 +1117,8 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    diffthis
 	elseif l:dropAction ==# 'split'
 	    execute s:HorizontalSplitModifier() (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'above'
+	    execute 'aboveleft' (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'vsplit'
 	    execute 'belowright' (l:dropAttributes.readonly ? 'vertical sview' : 'vsplit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'placement'
