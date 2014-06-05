@@ -15,12 +15,16 @@
 "   - ingo/msg.vim autoload script
 "   - ingo/query.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
+"   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2014 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	082	06-Jun-2014	When in the preview window and there's a normal
+"				window below, offer "edit below" as first
+"				choice.
 "	081	23-May-2014	Use ingo#fs#path#Exists() instead of
 "				filereadable().
 "	080	20-May-2014	Add "above" split choice.
@@ -813,9 +817,17 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	call insert(l:actions, '&tab...', -1)
     endif
     if &l:previewwindow
-	" When the current window is the preview window, move that action to the
-	" front, and remove the superfluous equivalent edit action.
-	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+	if winnr('$') > winnr() && ! ingo#window#special#IsSpecialWindow(winnr() + 1)
+	    " When the current window is the preview window, replace the edit
+	    " action with a special "edit below" action that corresponds to the
+	    " default edit (assuming the preview window is located above a
+	    " normal window).
+	    let l:actions[0] = l:editAction . ' below'
+	else
+	    " Move the preview action to the front, and remove the superfluous
+	    " equivalent edit action.
+	    let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+	endif
     endif
     if a:isInBuffer
 	call remove(l:actions, 0)
@@ -1105,6 +1117,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'edit below' || l:dropAction ==# 'create below'
+	    execute (winnr() + 1) . 'wincmd w'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'view'
 	    execute 'confirm view' . l:exFileOptionsAndCommands l:exfilespec
