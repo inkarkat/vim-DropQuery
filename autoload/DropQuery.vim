@@ -8,11 +8,12 @@
 "   - ingo/cmdargs/file.vim autoload script
 "   - ingo/cmdargs/glob.vim autoload script
 "   - ingo/compat.vim autoload script
-"   - ingo/query.vim autoload script
-"   - ingo/msg.vim autoload script
 "   - ingo/escape.vim autoload script
 "   - ingo/escape/file.vim autoload script
 "   - ingo/external.vim autoload script
+"   - ingo/fs/path.vim autoload script
+"   - ingo/msg.vim autoload script
+"   - ingo/query.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
@@ -20,6 +21,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	081	23-May-2014	Use ingo#fs#path#Exists() instead of
+"				filereadable().
 "	080	20-May-2014	Add "above" split choice.
 "	079	30-Apr-2014	Factor out s:Query() functionality to
 "				ingo#query#ConfirmAsText().
@@ -843,7 +846,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
     endif
-    if ! a:isInBuffer && &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
 
@@ -937,7 +940,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
     endif
-    if ! a:isInBuffer && &l:modified && ! filereadable(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
 
@@ -1080,7 +1083,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:dropAction = 'goto window'
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
-	let l:isNonexisting = empty(filereadable(a:filespec))
+	let l:isNonexisting = ! ingo#fs#path#Exists(a:filespec)
 	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
 	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:isInBuffer = (bufnr(ingo#escape#file#bufnameescape(a:filespec)) == bufnr(''))
@@ -1415,7 +1418,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	let l:dropAction = 'edit'
     elseif ! l:isForceQuery && l:isVisibleWindow
 	let l:dropAction = 'goto window'
-    elseif ! empty(filereadable(l:bufName))
+    elseif ingo#fs#path#Exists(l:bufName)
 	return s:DropSingleFile(l:isForceQuery, l:bufName, printf('Action for %s?', l:bufName), [])
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
