@@ -25,6 +25,8 @@
 "	082	06-Jun-2014	When in the preview window and there's a normal
 "				window below, offer "edit below" as first
 "				choice.
+"				Add "ask individually" action for multiple
+"				dropped files.
 "	081	23-May-2014	Use ingo#fs#path#Exists() instead of
 "				filereadable().
 "	080	20-May-2014	Add "above" split choice.
@@ -885,7 +887,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again']
+    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -1116,6 +1118,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
+	    return 0
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'edit below' || l:dropAction ==# 'create below'
@@ -1268,8 +1271,11 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
+
+	return 1
     catch /^Vim\%((\a\+)\)\=:/
 	call ingo#msg#VimExceptionMsg()
+	return -1
     endtry
 endfunction
 function! DropQuery#Drop( isForceQuery, filePatternsString )
@@ -1329,7 +1335,15 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	    let l:newBufNr = bufnr('')
 	endif
 
-	if l:dropAction ==# 'argadd'
+	if l:dropAction ==# 'ask individually'
+	    let l:success = 0
+	    for l:filespec in l:filespecs
+		if l:success
+		    redraw  " Otherwise, the individual drop result (e.g. a split window) wouldn't be visible yet.
+		endif
+		let l:success = (s:DropSingleFile(1, l:filespec, s:BuildQueryText([l:filespec], {'files': 1, 'removed': 0, 'nonexisting': 0}), l:fileOptionsAndCommands) == 1)
+	    endfor
+	elseif l:dropAction ==# 'argadd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', l:filespecs)
