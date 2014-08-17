@@ -14,6 +14,7 @@
 "   - ingo/fs/path.vim autoload script
 "   - ingo/msg.vim autoload script
 "   - ingo/query.vim autoload script
+"   - ingo/window/preview.vim autoload script
 "   - ingo/window/quickfix.vim autoload script
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
@@ -22,6 +23,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	083	06-Jul-2014	Use ingo#window#preview#OpenFilespec().
 "	082	06-Jun-2014	When in the preview window and there's a normal
 "				window below, offer "edit below" as first
 "				choice.
@@ -1147,10 +1149,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sview' . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
-	    " XXX: :pedit uses the CWD of the preview window. If that already
-	    " contains a file with another CWD, the shortened command is wrong.
-	    " Always use the absolute filespec.
-	    execute (exists('g:previewwindowsplitmode') ? g:previewwindowsplitmode : '') 'confirm pedit' . l:exFileOptionsAndCommands ingo#compat#fnameescape(a:filespec)
+	    call ingo#window#preview#OpenFilespec(a:filespec, {'isSilent': 0, 'isBang': 0, 'prefixCommand': 'confirm', 'exFileOptionsAndCommands': l:exFileOptionsAndCommands})
 	    " The :pedit command does not go to the preview window itself, but
 	    " the user probably wants to navigate in there.
 	    wincmd P
