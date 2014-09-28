@@ -578,7 +578,7 @@ function! s:BufDeleteExisting( filespec )
     if l:existingBufNr != -1 && bufloaded(l:existingBufNr)
 	try
 	    execute l:existingBufNr . 'bdelete'
-	catch /^Vim\%((\a\+)\)\=:E89/ " E89: No write since last change
+	catch /^Vim\%((\a\+)\)\=:E89:/ " E89: No write since last change
 	    call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
 	catch /^Vim\%((\a\+)\)\=:/
 	    call ingo#msg#VimExceptionMsg()
