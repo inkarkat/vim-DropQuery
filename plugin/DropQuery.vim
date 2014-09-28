@@ -6,10 +6,12 @@
 "   - Requires Vim 7.0 or higher.
 "   - DropQuery.vim autoload script
 "
-" Copyright: (C) 2005-2013 Ingo Karkat
+" Copyright: (C) 2005-2014 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	063	30-Apr-2014	Introduce g:DropQuery_PopupFocusCommand
+"				configuration to enable easier fiddling.
 "	062	27-Jan-2013	ENH: Allow forced query with [!].
 "	061	26-Jan-2013	ENH: Implement :BufDrop command that takes
 "				either an existing buffer number or name.
@@ -317,6 +319,17 @@ if !exists('g:DropQuery_NoPopup')
 endif
 if ! exists('g:DropQuery_MoveAwayPredicates')
     let g:DropQuery_MoveAwayPredicates = []
+endif
+if ! exists('g:DropQuery_PopupFocusCommand')
+    " Focus on the popup dialog requires that activation of Vim from the
+    " external call has been completed, so better wait a few milliseconds to
+    " avoid that Vim gets focus, but not Vim's popup dialog. This occurred on
+    " Windows XP.
+    " The sleep workaround still doesn't work all the time on Windows XP. I've
+    " empirically found out that I get better luck if foreground() is called
+    " before the delay, or maybe I'm just fooled once more. This whole stuff
+    " reminds me of witchcraft, not engineering :-)
+    let g:DropQuery_PopupFocusCommand = 'call foreground() | sleep 300m'
 endif
 
 
