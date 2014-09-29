@@ -8,6 +8,7 @@
 "   - ingo/cmdargs/file.vim autoload script
 "   - ingo/cmdargs/glob.vim autoload script
 "   - ingo/compat.vim autoload script
+"   - ingo/err.vim autoload script
 "   - ingo/escape.vim autoload script
 "   - ingo/escape/file.vim autoload script
 "   - ingo/external.vim autoload script
@@ -23,6 +24,11 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	084	29-Sep-2014	ENH: :Drop takes an optional range to treat
+"				lines in the buffer as filespecs.
+"				Add a:rangeList argument to DropQuery#Drop(),
+"				and return state now, as we now need explicit
+"				error handling.
 "	083	06-Jul-2014	Use ingo#window#preview#OpenFilespec().
 "	082	06-Jun-2014	When in the preview window and there's a normal
 "				window below, offer "edit below" as first
@@ -1277,15 +1283,41 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	return -1
     endtry
 endfunction
-function! DropQuery#Drop( isForceQuery, filePatternsString )
+function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
     let l:filePatterns = ingo#cmdargs#file#SplitAndUnescape(a:filePatternsString)
-    if empty(l:filePatterns)
-	throw 'Must pass at least one filespec / pattern!'
+    if empty(l:filePatterns) && empty(a:rangeList)
+	call ingo#err#Set('filespec, glob, or range required')
+	return 0
     endif
 
     " Strip off the optional ++opt +cmd file options and commands.
     let [l:filePatterns, l:fileOptionsAndCommands] = ingo#cmdargs#file#FilterFileOptionsAndCommands(l:filePatterns)
+
+    if ! empty(a:rangeList)
+	" Take all non-empty lines.
+	let l:nonEmptyLines =
+	\   filter(
+	\       map(
+	\           getline(a:rangeList[0], a:rangeList[1]),
+	\           'ingo#str#Trim(v:val)'
+	\       ),
+	\       'v:val =~# "\\S"'
+	\   )
+
+	if ! empty(l:nonEmptyLines)
+	    " Further filter the lines by the passed glob(s).
+	    let l:rangeGlobExpr =
+	    \   join(
+	    \       map(
+	    \           l:filePatterns,
+	    \           'ingo#regexp#fromwildcard#Convert(v:val)'
+	    \       ),
+	    \       '\|'
+	    \   )
+	    let l:filePatterns = filter(l:nonEmptyLines, 'v:val =~ l:rangeGlobExpr')
+	endif
+    endif
 
     let [l:filespecs, l:statistics] = ingo#cmdargs#glob#Resolve(l:filePatterns)
 "****D echomsg '****' string(l:statistics)
@@ -1301,10 +1333,10 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 
     if empty(l:filespecs)
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
-	return
+	return 1
     elseif l:statistics.files == 1
 	call s:DropSingleFile(a:isForceQuery, l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
-	return
+	return 1
     endif
 
     let l:originalWinNr = winnr()
@@ -1317,7 +1349,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString )
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
-	    return
+	    return 1
 	endif
 
 	if l:dropAttributes.fresh
