@@ -37,6 +37,11 @@ USAGE							     *DropQuery-usage*
 			Automatically locate the visible {file}, use an empty
 			window for it, or ask where to open {file}. With [!],
 			always ask.
+:{range}Drop[!] [++opt] [+cmd] {glob} ...
+			Treat each line in {range} (stripped of leading and
+			trailing whitespace) as a filespec / glob and ask
+			where to open those. {glob} can be used to optionally
+			filter the list.
 
 :[N]BufDrop[!] [N]	Automatically locate the visible buffer [N] / for
 :BufDrop[!] {bufname}	{bufname}, use an empty window for it, or ask where to
