@@ -42,6 +42,10 @@ USAGE							     *DropQuery-usage*
 			trailing whitespace) as a filespec / glob and ask
 			where to open those. {glob} can be used to optionally
 			filter the list.
+:Drop[!] [++opt] [+cmd] {reg}
+			Treat each line in {reg} (stripped of leading and
+			trailing whitespace) as a filespec / glob and ask
+			where to open those.
 
 :[N]BufDrop[!] [N]	Automatically locate the visible buffer [N] / for
 :BufDrop[!] {bufname}	{bufname}, use an empty window for it, or ask where to
