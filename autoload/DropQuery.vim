@@ -24,6 +24,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	085	30-Sep-2014	ENH: :Drop also takes a register name, whose
+"				lines are treated as filespecs, similar to the
+"				passed range.
 "	084	29-Sep-2014	ENH: :Drop takes an optional range to treat
 "				lines in the buffer as filespecs.
 "				Add a:rangeList argument to DropQuery#Drop(),
@@ -1294,12 +1297,19 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     " Strip off the optional ++opt +cmd file options and commands.
     let [l:filePatterns, l:fileOptionsAndCommands] = ingo#cmdargs#file#FilterFileOptionsAndCommands(l:filePatterns)
 
-    if ! empty(a:rangeList)
+    if ! empty(a:rangeList) || len(l:filePatterns) == 1 && l:filePatterns[0] =~# '^[-a-zA-Z0-9"*+_/]$'
+	if empty(a:rangeList)
+	    let l:lines = split(getreg(l:filePatterns[0]), '\n')
+	    let l:filePatterns = []
+	else
+	    let l:lines = getline(a:rangeList[0], a:rangeList[1])
+	endif
+
 	" Take all non-empty lines.
 	let l:nonEmptyLines =
 	\   filter(
 	\       map(
-	\           getline(a:rangeList[0], a:rangeList[1]),
+	\           l:lines,
 	\           'ingo#str#Trim(v:val)'
 	\       ),
 	\       'v:val =~# "\\S"'
