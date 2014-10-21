@@ -5,11 +5,16 @@
 " DEPENDENCIES:
 "   - Requires Vim 7.0 or higher.
 "   - DropQuery.vim autoload script
+"   - ingo/err.vim autoload script
 "
 " Copyright: (C) 2005-2014 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	064	29-Sep-2014	ENH: :Drop takes an optional range to treat
+"				lines in the buffer as filespecs.
+"				Check for returned state of DropQuery#Drop(), as
+"				we now need explicit error handling.
 "	063	30-Apr-2014	Introduce g:DropQuery_PopupFocusCommand
 "				configuration to enable easier fiddling.
 "	062	27-Jan-2013	ENH: Allow forced query with [!].
@@ -353,7 +358,7 @@ endif
 " arguments.
 " We do specify multiple arguments, so that file completion works for all
 " arguments.
-command! -bang -nargs=+ -complete=file Drop call DropQuery#Drop(<bang>0, <q-args>)
+command! -bang -range=-1 -nargs=* -complete=file Drop if ! DropQuery#Drop(<bang>0, <q-args>, (<count> == -1 ? [] : [<line1>, <line2>]))| echoerr ingo#err#Get() | endif
 
 command! -bang -count=0 -nargs=? -complete=buffer BufDrop call DropQuery#DropBuffer(<bang>0, <count>, <f-args>)
 
