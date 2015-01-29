@@ -24,6 +24,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	086	22-Oct-2014	Add g:DropQuery_FilespecProcessor to allow hook
+"				functions to tweak the opened filespecs.
 "	085	30-Sep-2014	ENH: :Drop also takes a register name, whose
 "				lines are treated as filespecs, similar to the
 "				passed range.
@@ -1327,6 +1329,10 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    \   )
 	    let l:filePatterns = filter(l:nonEmptyLines, 'v:val =~ l:rangeGlobExpr')
 	endif
+    endif
+
+    if ! empty(g:DropQuery_FilespecProcessor)
+	call map(l:filePatterns, 'call(g:DropQuery_FilespecProcessor, [v:val])')
     endif
 
     let [l:filespecs, l:statistics] = ingo#cmdargs#glob#Resolve(l:filePatterns)
