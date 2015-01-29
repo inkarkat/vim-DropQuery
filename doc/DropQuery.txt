@@ -90,7 +90,16 @@ away from them before querying for a drop action, you can define predicate
 expressions or Funcrefs to characterize such windows in the following List: >
     let g:DropQuery_MoveAwayPredicates = ["&filetype == 'scratch'"]
 <
-
+			*g:DropQuery_FilespecProcessor*
+If you want to process individual filespecs passed to |:Drop|, you can hook in
+a processor function that takes a single filespec (or file glob), and returns
+this changed or unchanged: >
+    function! MyFilespecProcessor( filespec )
+	" Create virtual X drive mapping to C:\Windows.
+	return substitute(a:filespec, '^X:', 'C:\Windows', '')
+    endfunction
+    let g:DropQuery_FilespecProcessor = function('MyFilespecProcessor')
+<
 ==============================================================================
 INTEGRATION					       *DropQuery-integration*
 
