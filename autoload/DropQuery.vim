@@ -20,10 +20,14 @@
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2014 Ingo Karkat
+" Copyright: (C) 2005-2015 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	087	30-Jan-2015	Switch to
+"				ingo#regexp#fromwildcard#AnchoredToPathBoundaries()
+"				to correctly enforce path boundaries in :Drop
+"				{reg} and :{range}Drop {glob}.
 "	086	22-Oct-2014	Add g:DropQuery_FilespecProcessor to allow hook
 "				functions to tweak the opened filespecs.
 "	085	30-Sep-2014	ENH: :Drop also takes a register name, whose
@@ -1301,9 +1305,11 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 
     if ! empty(a:rangeList) || len(l:filePatterns) == 1 && l:filePatterns[0] =~# '^[-a-zA-Z0-9"*+_/]$'
 	if empty(a:rangeList)
+	    " :Drop {reg}
 	    let l:lines = split(getreg(l:filePatterns[0]), '\n')
 	    let l:filePatterns = []
 	else
+	    " :{range}Drop [{glob}]
 	    let l:lines = getline(a:rangeList[0], a:rangeList[1])
 	endif
 
@@ -1323,7 +1329,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    \   join(
 	    \       map(
 	    \           l:filePatterns,
-	    \           'ingo#regexp#fromwildcard#Convert(v:val)'
+	    \           'ingo#regexp#fromwildcard#AnchoredToPathBoundaries(v:val)'
 	    \       ),
 	    \       '\|'
 	    \   )
