@@ -11,6 +11,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	065	22-Oct-2014	Add g:DropQuery_FilespecProcessor to allow hook
+"				functions to tweak the opened filespecs.
 "	064	29-Sep-2014	ENH: :Drop takes an optional range to treat
 "				lines in the buffer as filespecs.
 "				Check for returned state of DropQuery#Drop(), as
@@ -319,7 +321,7 @@ let g:loaded_DropQuery = 1
 if ! exists('g:DropQuery_RemapDrop')
     let g:DropQuery_RemapDrop = 1
 endif
-if !exists('g:DropQuery_NoPopup')
+if ! exists('g:DropQuery_NoPopup')
     let g:DropQuery_NoPopup = 0
 endif
 if ! exists('g:DropQuery_MoveAwayPredicates')
@@ -335,6 +337,9 @@ if ! exists('g:DropQuery_PopupFocusCommand')
     " before the delay, or maybe I'm just fooled once more. This whole stuff
     " reminds me of witchcraft, not engineering :-)
     let g:DropQuery_PopupFocusCommand = 'call foreground() | sleep 300m'
+endif
+if ! exists('g:DropQuery_FilespecProcessor')
+    let g:DropQuery_FilespecProcessor = ''
 endif
 
 
