@@ -24,6 +24,10 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	088	07-Feb-2015	ENH: Keep previous (last accessed) window after
+"				having moved away. Add a:previousWinNr argument
+"				to s:RestoreMove(), and use that also in
+"				s:MoveAway().
 "	087	30-Jan-2015	Switch to
 "				ingo#regexp#fromwildcard#AnchoredToPathBoundaries()
 "				to correctly enforce path boundaries in :Drop
@@ -1002,6 +1006,7 @@ function! s:MoveAway()
 
     if s:IsMoveAway()
 	let l:originalWinNr = winnr()
+	let l:previousWinNr = winnr('#') ? winnr('#') : 1
 	if winnr('#') != winnr()
 	    " Try the previous window first.
 	    wincmd p
@@ -1019,7 +1024,7 @@ function! s:MoveAway()
 	endfor
 
 	" No chance; remain at the original window.
-	execute l:originalWinNr . 'wincmd w'
+	call s:RestoreMove(1, l:originalWinNr, l:previousWinNr)
     endif
 
     return 0
@@ -1033,8 +1038,11 @@ function! s:MoveAwayAndRefresh()
     endif
     return l:isMovedAway
 endfunction
-function! s:RestoreMove( isMovedAway, originalWinNr )
+function! s:RestoreMove( isMovedAway, originalWinNr, previousWinNr )
     if a:isMovedAway
+	if winnr('#') != a:previousWinNr
+	    execute a:previousWinNr . 'wincmd w'
+	endif
 	execute a:originalWinNr . 'wincmd w'
     endif
 endfunction
@@ -1105,6 +1113,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "****D echomsg '****' string(l:exFileOptionsAndCommands) string(l:exfilespec)
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
+    let l:previousWinNr = winnr('#') ? winnr('#') : 1
     let l:isMovedAway = 0
     let l:isVisibleWindow = s:IsVisibleWindow(a:filespec)
     let l:tabPageNr = s:GetTabPageNr(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
@@ -1133,7 +1142,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 
     try
 	if empty(l:dropAction)
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
 	    return 0
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
@@ -1177,7 +1186,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argadd'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [a:filespec])
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
@@ -1217,14 +1226,14 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'new tab'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute tabpagenr('$') . 'tabedit' . l:exFileOptionsAndCommands l:exfilespec
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'tabnr'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute 'tabnext' l:dropAttributes.tabnr
 
@@ -1241,7 +1250,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 		execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	    endif
 	elseif l:dropAction ==# 'goto tab'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
@@ -1254,7 +1263,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    endif
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'goto window'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
 	    " Do not use the :drop command to activate the window which contains the
@@ -1266,7 +1275,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    endif
 	    call s:ExecuteFileOptionsAndCommands(a:fileOptionsAndCommands)
 	elseif l:dropAction ==# 'use blank window'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    " Note: Do not use the shortened l:exfilespec here, the :wincmd may
@@ -1274,10 +1283,10 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " re-shorten the absolute filespec.
 	    execute (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
 	elseif l:dropAction ==# 'external GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'other GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright split' . l:exFileOptionsAndCommands l:exfilespec
@@ -1362,6 +1371,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     endif
 
     let l:originalWinNr = winnr()
+    let l:previousWinNr = winnr('#') ? winnr('#') : 1
     let l:isMovedAway = s:MoveAwayAndRefresh()
     let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
 
@@ -1369,7 +1379,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
     try
 	if empty(l:dropAction)
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
 	    return 1
 	endif
@@ -1397,7 +1407,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 		let l:success = (s:DropSingleFile(1, l:filespec, s:BuildQueryText([l:filespec], {'files': 1, 'removed': 0, 'nonexisting': 0}), l:fileOptionsAndCommands) == 1)
 	    endfor
 	elseif l:dropAction ==# 'argadd'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', l:filespecs)
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
@@ -1437,7 +1447,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    \	reverse(l:filespecs)
 	    \)
 	elseif l:dropAction ==# 'new tab'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    " Note: Cannot use tabpagenr('$') here, as each file will increase
 	    " it, but the expression isn't reevaluated. Just use a very large
@@ -1448,13 +1458,13 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    \	l:filespecs
 	    \)
 	elseif l:dropAction ==# 'external GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:ExternalGvimForEachFile((l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands, l:filespecs)
 	elseif l:dropAction ==# 'external single GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:ExternalGvimForAllFiles(l:exFileOptionsAndCommands, l:filespecs)
 	elseif l:dropAction ==# 'other GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, l:filespecs)
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
@@ -1492,6 +1502,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
+    let l:previousWinNr = winnr('#') ? winnr('#') : 1
     let l:isMovedAway = 0
     let l:isForceQuery = (a:isForceQuery || l:bufNr == l:originalBufNr)
     let l:isVisibleWindow = (bufwinnr(l:bufNr) != -1)
@@ -1524,7 +1535,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 
     try
 	if empty(l:dropAction)
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of buffer #' . l:bufNr)
 	elseif l:dropAction ==# 'edit'
 	    execute 'confirm buffer' l:bufNr
@@ -1547,7 +1558,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	elseif l:dropAction ==# 'show'
 	    execute 'call TopLeftHook() | topleft sbuffer' l:bufNr
 	elseif l:dropAction ==# 'preview'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    if &l:previewwindow
 		execute 'confirm buffer' l:bufNr
@@ -1577,11 +1588,11 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    execute l:dropAttributes.winnr . 'wincmd w'
 	    execute 'confirm buffer' l:bufNr
 	elseif l:dropAction ==# 'new tab'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute tabpagenr('$') . 'tab sbuffer' l:bufNr
 	elseif l:dropAction ==# 'tabnr'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute 'tabnext' l:dropAttributes.tabnr
 
@@ -1593,7 +1604,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 		execute 'confirm buffer' l:bufNr
 	    endif
 	elseif l:dropAction ==# 'goto tab'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    " The :drop command would do the trick and switch to the correct tab
 	    " page, but it is to be avoided as it adds the dropped file to the
@@ -1602,16 +1613,16 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    execute 'tabnext' l:tabPageNr
 	    execute bufwinnr(l:bufNr) . 'wincmd w'
 	elseif l:dropAction ==# 'goto window'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute bufwinnr(l:bufNr) . 'wincmd w'
 	elseif l:dropAction ==# 'use blank window'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    execute l:blankWindowNr . 'wincmd w'
 	    execute 'buffer' l:bufNr
 	elseif l:dropAction ==# 'external GVIM' || l:dropAction ==# 'other GVIM'
-	    call s:RestoreMove(l:isMovedAway, l:originalWinNr)
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    let l:bufContents = getbufline(l:bufNr, 1, '$')
 	    if getbufvar(l:bufNr, '&fileformat') ==# 'dos'
