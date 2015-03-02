@@ -24,6 +24,11 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	089	13-Feb-2015	BUG: Inconsistent use of ingo#msg vs. ingo#err
+"				and return status of functions. Straighten out
+"				and document.
+"				Return success status also from
+"				DropQuery#DropBuffer().
 "	088	07-Feb-2015	ENH: Keep previous (last accessed) window after
 "				having moved away. Add a:previousWinNr argument
 "				to s:RestoreMove(), and use that also in
@@ -600,7 +605,7 @@ function! s:BufDeleteExisting( filespec )
 	catch /^Vim\%((\a\+)\)\=:E89:/ " E89: No write since last change
 	    call ingo#msg#WarningMsg(printf('Buffer %d has unsaved changes here: %s', l:existingBufNr, bufname(l:existingBufNr)))
 	catch /^Vim\%((\a\+)\)\=:/
-	    call ingo#msg#VimExceptionMsg()
+	    call ingo#msg#VimExceptionMsg() " Need to print this here as we want to avoid interrupting the outer flow.
 	endtry
     endif
 endfunction
@@ -1103,7 +1108,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "   a:fileOptionsAndCommands	List containing all optional file options and
 "				commands.
 "* RETURN VALUES:
-"   none
+"   0 if unsuccessful
+"   1 if a file was opened
+"   -1 if the opening has been canceled by the user
 "*******************************************************************************
 "****D echomsg '**** Dropped filespec' string(a:filespec) 'options' string(a:fileOptionsAndCommands)
     let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
@@ -1144,7 +1151,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of file ' . a:filespec)
-	    return 0
+	    return -1
 	elseif l:dropAction ==# 'edit' || l:dropAction ==# 'create'
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'edit below' || l:dropAction ==# 'create below'
@@ -1297,11 +1304,25 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 
 	return 1
     catch /^Vim\%((\a\+)\)\=:/
-	call ingo#msg#VimExceptionMsg()
-	return -1
+	call ingo#err#SetVimException()
+	return 0
     endtry
 endfunction
 function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
+"******************************************************************************
+"* PURPOSE:
+"	? What the procedure does (not how).
+"* ASSUMPTIONS / PRECONDITIONS:
+"	? List of any external variable, control, or other element whose state affects this procedure.
+"* EFFECTS / POSTCONDITIONS:
+"	? List of the procedure's effect on each external variable, control, or other element.
+"* INPUTS:
+"	? Explanation of each argument that isn't obvious.
+"* RETURN VALUES:
+"   0 if unsuccessful
+"   1 if file(s) were opened
+"   -1 if the opening has been canceled by the user
+"******************************************************************************
 "****D echomsg '**** Dropped pattern is "' . a:filePatternsString . '". '
     let l:filePatterns = ingo#cmdargs#file#SplitAndUnescape(a:filePatternsString)
     if empty(l:filePatterns) && empty(a:rangeList)
@@ -1364,10 +1385,9 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 
     if empty(l:filespecs)
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
-	return 1
+	return -1
     elseif l:statistics.files == 1
-	call s:DropSingleFile(a:isForceQuery, l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
-	return 1
+	return s:DropSingleFile(a:isForceQuery, l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
     endif
 
     let l:originalWinNr = winnr()
@@ -1381,7 +1401,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call ingo#msg#WarningMsg('Canceled opening of ' . l:statistics.files . ' files. ')
-	    return 1
+	    return -1
 	endif
 
 	if l:dropAttributes.fresh
@@ -1401,10 +1421,14 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	if l:dropAction ==# 'ask individually'
 	    let l:success = 0
 	    for l:filespec in l:filespecs
-		if l:success
+		if l:success == 1
 		    redraw  " Otherwise, the individual drop result (e.g. a split window) wouldn't be visible yet.
 		endif
 		let l:success = (s:DropSingleFile(1, l:filespec, s:BuildQueryText([l:filespec], {'files': 1, 'removed': 0, 'nonexisting': 0}), l:fileOptionsAndCommands) == 1)
+		if ! l:success
+		    " Need to print this here to fit into the interactive flow.
+		    call ingo#msg#ErrorMsg(ingo#err#Get())
+		endif
 	    endfor
 	elseif l:dropAction ==# 'argadd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
@@ -1473,8 +1497,11 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	if l:dropAttributes.fresh && empty(bufname(l:newBufNr))
 	    execute printf('silent! %dbdelete', l:newBufNr)
 	endif
+
+	return 1
     catch /^Vim\%((\a\+)\)\=:/
-	call ingo#msg#VimExceptionMsg()
+	call ingo#err#SetVimException()
+	return 0
     endtry
 endfunction
 function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
@@ -1491,12 +1518,14 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 "   a:1     Buffer name argument alternative over a:bufNr. Takes precedence over
 "	    it.
 "* RETURN VALUES:
-"   none
+"   0 if unsuccessful
+"   1 if a buffer was opened
+"   -1 if the opening has been canceled by the user
 "*******************************************************************************
     let l:bufNr = (a:0 ? bufnr(a:1) : (a:bufNr == 0 ? bufnr('') : a:bufNr))
     if ! bufexists(l:bufNr)
-	call ingo#msg#ErrorMsg('No such buffer: ' . (a:0 ? a:1 : a:bufNr))
-	return
+	call ingo#err#Set('No such buffer: ' . (a:0 ? a:1 : a:bufNr))
+	return 0
     endif
     let l:bufName = bufname(l:bufNr)
 
@@ -1631,8 +1660,8 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 
 	    let l:tempFilespec = tempname()
 	    if writefile(l:bufContents, l:tempFilespec) == -1
-		call ingo#msg#ErrorMsg('Write of transfer temp file failed: ' . l:tempFilespec)
-		return
+		call ingo#err#Set('Write of transfer temp file failed: ' . l:tempFilespec)
+		return 0
 	    endif
 
 	    " Forcibly unload the buffer from this Vim instance; it does not
@@ -1659,8 +1688,10 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
+	return 1
     catch /^Vim\%((\a\+)\)\=:/
-	call ingo#msg#VimExceptionMsg()
+	call ingo#err#SetVimException()
+	return 0
     endtry
 endfunction
 
