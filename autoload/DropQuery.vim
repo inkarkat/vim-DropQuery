@@ -771,11 +771,20 @@ function! s:BuildQueryText( filespecs, statistics )
     endif
 endfunction
 function! s:QueryActionForArguments( actions )
+    let l:idx = index(a:actions, '&argedit')
     if argc() > 0
 	" There already are arguments; add :argadd choice and make it the
 	" default by removing the accelerator from :argedit.
-	call insert(a:actions, '&argadd', index(a:actions, '&argedit'))
-	let a:actions[index(a:actions, '&argedit')] = 'argedit'
+	call insert(a:actions, '&argadd', l:idx)
+	let a:actions[l:idx] = 'argedit'
+	let l:idx += 1
+    elseif ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
+	" There is only the current buffer (which might have been :Drop'ed
+	" before). As the plugin doesn't ask for the first buffer (and just
+	" :edit's it), but we might want to collect all dropped files into the
+	" argument list, offer an option to :argadd the current one plus the
+	" :Drop'ed one(s).
+	call insert(a:actions, 'arg&+add', l:idx + 1)
     endif
 endfunction
 function! s:QueryOther( querytext, dropAttributes, otherVims, isMultipleFiles )
@@ -1193,6 +1202,24 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 		setlocal readonly
 	    endif
 	elseif l:dropAction ==# 'argadd'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [a:filespec])
+	    " :argadd just modifies the argument list; l:dropAttributes.readonly
+	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
+	    " neither.
+
+	    " Since :argadd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, show the new
+	    " argument list as a courtesy.
+	    args
+	elseif l:dropAction ==# 'arg+add'
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
+	    " Try to make the current buffer the current argument; this fails
+	    " when changes have been made; ignore this then, and keep the
+	    " argument index unset: "((3) of 2)".
+	    silent! execute argc() . 'argument'
+
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [a:filespec])
