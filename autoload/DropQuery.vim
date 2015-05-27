@@ -24,6 +24,11 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	090	03-Mar-2015	ENH: Add "arg+add" option that adds the current
+"				buffer (if it's the single one) to the argument
+"				list _and_ the dropped file(s). Useful when
+"				collecting individual files to the argument
+"				list.
 "	089	13-Feb-2015	BUG: Inconsistent use of ingo#msg vs. ingo#err
 "				and return status of functions. Straighten out
 "				and document.
@@ -1457,6 +1462,9 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 		    call ingo#msg#ErrorMsg(ingo#err#Get())
 		endif
 	    endfor
+	elseif l:dropAction ==# 'argedit'
+	    call s:ExecuteWithoutWildignore('confirm args' . l:exFileOptionsAndCommands, l:filespecs)
+	    if l:dropAttributes.readonly | setlocal readonly | endif
 	elseif l:dropAction ==# 'argadd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
@@ -1469,9 +1477,24 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " thus is no clash with an "edit file" message, show the new
 	    " argument list as a courtesy.
 	    args
-	elseif l:dropAction ==# 'argedit'
-	    call s:ExecuteWithoutWildignore('confirm args' . l:exFileOptionsAndCommands, l:filespecs)
-	    if l:dropAttributes.readonly | setlocal readonly | endif
+	elseif l:dropAction ==# 'arg+add'
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
+	    " Try to make the current buffer the current argument; this fails
+	    " when changes have been made; ignore this then, and keep the
+	    " argument index unset: "((3) of 2)".
+	    silent! execute argc() . 'argument'
+
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    call s:ExecuteWithoutWildignore(argc() . 'argadd', l:filespecs)
+	    " :argadd just modifies the argument list; l:dropAttributes.readonly
+	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
+	    " neither.
+
+	    " Since :argadd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, show the new
+	    " argument list as a courtesy.
+	    args
 	elseif l:dropAction ==# 'diff'
 	    call s:ExecuteForEachFile(
 	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
