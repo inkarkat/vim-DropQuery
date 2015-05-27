@@ -24,6 +24,10 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	091	28-May-2015	With Vim 7.4.565, :99999tabedit causes "E16:
+"				Invalid range"; use tabpagenr('$') instead.
+"				FIX: Missing accelerator on multi-file "new
+"				tab".
 "	090	03-Mar-2015	ENH: Add "arg+add" option that adds the current
 "				buffer (if it's the single one) to the argument
 "				list _and_ the dropped file(s). Useful when
@@ -927,7 +931,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
+    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -1527,7 +1531,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " it, but the expression isn't reevaluated. Just use a very large
 	    " value to force adding as the last tab page for each one.
 	    call s:ExecuteForEachFile(
-	    \	'99999tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
+	    \	tabpagenr('$') . 'tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
