@@ -24,6 +24,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	092	29-May-2015	ENH: Add "add to quickfix" option for multi-file
+"				drop.
 "	091	28-May-2015	With Vim 7.4.565, :99999tabedit causes "E16:
 "				Invalid range"; use tabpagenr('$') instead.
 "				FIX: Missing accelerator on multi-file "new
@@ -935,7 +937,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'badd', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
+    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -1538,6 +1540,22 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    else
 		echo printf('Added %d buffers', l:addedBufNum)
 	    endif
+	elseif l:dropAction ==# 'add to quickfix'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    silent doautocmd QuickFixCmdPre DropQuery | " Allow hooking into the quickfix update.
+		call setqflist(map(
+		\   l:filespecs,
+		\   "{'filename': v:val, 'lnum': 1}"
+		\), 'a')
+	    silent doautocmd QuickFixCmdPost DropQuery | " Allow hooking into the quickfix update.
+	    " This just modifies the quickfix list; l:dropAttributes.readonly
+	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
+	    " neither.
+	    " Since this doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, notify about the
+	    " total and number of added entries as a courtesy.
+	    echo printf('Add %d entries; total now is %d', len(l:filespecs), len(getqflist()))
 	elseif l:dropAction ==# 'diff'
 	    call s:ExecuteForEachFile(
 	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
