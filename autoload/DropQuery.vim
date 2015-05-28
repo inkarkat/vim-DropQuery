@@ -782,21 +782,29 @@ function! s:BuildQueryText( filespecs, statistics )
 	return printf('%sAction for %s?', l:fileNotes, l:fileCharacterization)
     endif
 endfunction
-function! s:QueryActionForArguments( actions )
+function! s:QueryActionForArguments( actions, isMultipleFiles )
     let l:idx = index(a:actions, '&argedit')
     if argc() > 0
 	" There already are arguments; add :argadd choice and make it the
 	" default by removing the accelerator from :argedit.
-	call insert(a:actions, '&argadd', l:idx)
 	let a:actions[l:idx] = 'argedit'
-	let l:idx += 1
-    elseif ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
-	" There is only the current buffer (which might have been :Drop'ed
-	" before). As the plugin doesn't ask for the first buffer (and just
-	" :edit's it), but we might want to collect all dropped files into the
-	" argument list, offer an option to :argadd the current one plus the
-	" :Drop'ed one(s).
-	call insert(a:actions, 'arg&+add', l:idx + 1)
+	call insert(a:actions, '&argadd', l:idx)
+    else
+	if ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
+	    " There is only the current buffer (which might have been :Drop'ed
+	    " before). As the plugin doesn't ask for the first buffer (and just
+	    " :edit's it), but we might want to collect all dropped files into
+	    " the argument list, offer an option to :argadd the current one plus
+	    " the :Drop'ed one(s).
+	    call insert(a:actions, 'arg&+add', l:idx + 1)
+	endif
+	" Default to :argadd when adding a single file and no arguments are
+	" already there; we might want to collect more of them, but not edit
+	" them yet.
+	if ! a:isMultipleFiles
+	    let a:actions[l:idx] = 'argedit'
+	    call insert(a:actions, '&argadd', l:idx)
+	endif
     endif
 endfunction
 function! s:QueryOther( querytext, dropAttributes, otherVims, isMultipleFiles )
@@ -881,7 +889,6 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if a:isInBuffer
 	call remove(l:actions, 0)
     endif
-    call s:QueryActionForArguments(l:actions)
     if ! a:isNonexisting
 	if ! a:isInBuffer
 	    call insert(l:actions, 'v&iew', 1)
@@ -895,6 +902,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	    call insert(l:actions, 'badd', index(l:actions, '&argedit') + 1)
 	endif
     endif
+    call s:QueryActionForArguments(l:actions, 0)
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
@@ -941,7 +949,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
-    call s:QueryActionForArguments(l:actions)
+    call s:QueryActionForArguments(l:actions, 1)
     if a:fileNum <= 4
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
