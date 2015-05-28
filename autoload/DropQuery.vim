@@ -935,7 +935,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
+    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'badd', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -1521,6 +1521,23 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " thus is no clash with an "edit file" message, show the new
 	    " argument list as a courtesy.
 	    args
+	elseif l:dropAction ==# 'badd'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    let l:bufNum = bufnr('$')
+	    call s:ExecuteForEachFile('badd', '', l:filespecs)
+	    " :badd just modifies the buffer list; l:dropAttributes.readonly
+	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
+	    " neither.
+	    " Since :badd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, notify about the
+	    " number of added buffers as a courtesy.
+	    let l:addedBufNum = bufnr('$') - l:bufNum
+	    if l:addedBufNum == 0
+		call ingo#msg#WarningMsg('No new buffers were added')
+	    else
+		echo printf('Added %d buffers', l:addedBufNum)
+	    endif
 	elseif l:dropAction ==# 'diff'
 	    call s:ExecuteForEachFile(
 	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
