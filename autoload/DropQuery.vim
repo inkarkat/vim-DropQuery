@@ -28,6 +28,7 @@
 "				Invalid range"; use tabpagenr('$') instead.
 "				FIX: Missing accelerator on multi-file "new
 "				tab".
+"				ENH: Add "badd" option that just does :badd.
 "	090	03-Mar-2015	ENH: Add "arg+add" option that adds the current
 "				buffer (if it's the single one) to the argument
 "				list _and_ the dropped file(s). Useful when
@@ -840,7 +841,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -888,6 +889,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	    call insert(l:actions, 's&how', l:previewIdx + 1)
 	endif
 	call add(l:actions, '&readonly and ask again')
+	if ! a:isLoaded
+	    call insert(l:actions, 'badd', index(l:actions, '&argedit') + 1)
+	endif
     endif
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
@@ -1151,7 +1155,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:isNonexisting = ! ingo#fs#path#Exists(a:filespec)
 	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
 	let l:hasOtherWindows = (winnr('$') > 1)
-	let l:isInBuffer = (bufnr(ingo#escape#file#bufnameescape(a:filespec)) == bufnr(''))
+	let l:bufNr = bufnr(ingo#escape#file#bufnameescape(a:filespec))
+	let l:isLoaded = (l:bufNr != -1)
+	let l:isInBuffer = (l:bufNr == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
 	\   (l:isInBuffer ? substitute(a:querytext, '^\CAction for ', '&this buffer ', '') : a:querytext),
@@ -1159,6 +1165,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	\   l:hasOtherBuffers,
 	\   l:hasOtherWindows,
 	\   l:isVisibleWindow,
+	\   l:isLoaded,
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
 	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr())
@@ -1240,6 +1247,21 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " thus is no clash with an "edit file" message, show the new
 	    " argument list as a courtesy.
 	    args
+	elseif l:dropAction ==# 'badd'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    execute 'badd' l:exfilespec
+	    " :badd just modifies the buffer list; l:dropAttributes.readonly
+	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
+	    " neither.
+	    " Since :badd doesn't change the currently edited file, and there
+	    " thus is no clash with an "edit file" message, show the new buffer
+	    " number as a courtesy.
+	    let l:addedBufferFilespec = ingo#escape#file#bufnameescape(a:filespec)
+	    let l:addedBufNr = bufnr(l:addedBufferFilespec)
+	    if l:addedBufNr != -1
+		echo printf("%d\t\"%s\"", l:addedBufNr, bufname(l:addedBufferFilespec))
+	    endif
 	elseif l:dropAction ==# 'only'
 	    " BF: Avoid :drop command as it adds the dropped file to the argument list.
 	    "execute 'drop' l:exfilespec . '|only'
