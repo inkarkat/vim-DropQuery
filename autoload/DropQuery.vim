@@ -26,6 +26,9 @@
 " REVISION	DATE		REMARKS
 "	092	29-May-2015	ENH: Add "add to quickfix" option for multi-file
 "				drop.
+"				Re-introduce :argadd unconditionally (to avoid
+"				switching files), as I found it useful. Assign
+"				fixed accelerators &argadd and ar&gedit.
 "	091	28-May-2015	With Vim 7.4.565, :99999tabedit causes "E16:
 "				Invalid range"; use tabpagenr('$') instead.
 "				FIX: Missing accelerator on multi-file "new
@@ -783,28 +786,14 @@ function! s:BuildQueryText( filespecs, statistics )
     endif
 endfunction
 function! s:QueryActionForArguments( actions, isMultipleFiles )
-    let l:idx = index(a:actions, '&argedit')
-    if argc() > 0
-	" There already are arguments; add :argadd choice and make it the
-	" default by removing the accelerator from :argedit.
-	let a:actions[l:idx] = 'argedit'
-	call insert(a:actions, '&argadd', l:idx)
-    else
-	if ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
-	    " There is only the current buffer (which might have been :Drop'ed
-	    " before). As the plugin doesn't ask for the first buffer (and just
-	    " :edit's it), but we might want to collect all dropped files into
-	    " the argument list, offer an option to :argadd the current one plus
-	    " the :Drop'ed one(s).
-	    call insert(a:actions, 'arg&+add', l:idx + 1)
-	endif
-	" Default to :argadd when adding a single file and no arguments are
-	" already there; we might want to collect more of them, but not edit
-	" them yet.
-	if ! a:isMultipleFiles
-	    let a:actions[l:idx] = 'argedit'
-	    call insert(a:actions, '&argadd', l:idx)
-	endif
+    let l:idx = index(a:actions, 'ar&gedit')
+    if argc() == 0 && ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
+	" There is only the current buffer (which might have been :Drop'ed
+	" before). As the plugin doesn't ask for the first buffer (and just
+	" :edit's it), but we might want to collect all dropped files into the
+	" argument list, offer an option to :argadd the current one plus the
+	" :Drop'ed one(s).
+	call insert(a:actions, 'arg&+add', l:idx + 1)
     endif
 endfunction
 function! s:QueryOther( querytext, dropAttributes, otherVims, isMultipleFiles )
@@ -862,7 +851,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " already existed).
     let l:editAction = (a:isNonexisting ? '&create' : '&edit')
     let l:otherVims = s:GetOtherVims()
-    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
+    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
     if a:hasOtherWindows
 	call insert(l:actions, '&window...', -1)
     endif
@@ -899,7 +888,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	endif
 	call add(l:actions, '&readonly and ask again')
 	if ! a:isLoaded
-	    call insert(l:actions, 'badd', index(l:actions, '&argedit') + 1)
+	    call insert(l:actions, 'badd', index(l:actions, 'ar&gedit') + 1)
 	endif
     endif
     call s:QueryActionForArguments(l:actions, 0)
@@ -945,7 +934,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 endfunction
 function! s:QueryActionForMultipleFiles( querytext, fileNum )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argedit', '&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
+    let l:actions = ['&argadd', 'ar&gedit', '&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
