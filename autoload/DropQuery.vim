@@ -20,10 +20,12 @@
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2015 Ingo Karkat
+" Copyright: (C) 2005-2016 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	093	04-Feb-2016	DWIM: Better handling when passed a
+"				backslash-delimited Windows-style path on Unix.
 "	092	29-May-2015	ENH: Add "add to quickfix" option for multi-file
 "				drop.
 "				Re-introduce :argadd unconditionally (to avoid
@@ -1439,6 +1441,13 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     " autocmds that change the CWD, especially when :split'ing multiple files or
     " commands that first move to a different window.
     call map(l:filespecs, 'fnamemodify(v:val, ":p")')
+
+    if l:statistics.files == 1 && l:statistics.nonexisting == 1 && ingo#fs#path#Separator() ==# '/' && l:filePatterns[0] =~# '\\' && l:filePatterns[0] !~# '/'
+	" DWIM: A backslash-separated filespec has been passed on Unix. Instead
+	" of offering to create a monster of a long filename, normalize and try
+	" again.
+	let [l:filespecs, l:statistics] = ingo#cmdargs#glob#Resolve(map(l:filePatterns, 'ingo#fs#path#Normalize(v:val)'))
+    endif
 
     if empty(l:filespecs)
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
