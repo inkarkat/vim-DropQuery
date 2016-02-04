@@ -1447,6 +1447,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	" of offering to create a monster of a long filename, normalize and try
 	" again.
 	let [l:filespecs, l:statistics] = ingo#cmdargs#glob#Resolve(map(l:filePatterns, 'ingo#fs#path#Normalize(v:val)'))
+	call map(l:filespecs, 'fnamemodify(v:val, ":p")')
     endif
 
     if empty(l:filespecs)
