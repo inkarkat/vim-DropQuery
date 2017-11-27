@@ -24,6 +24,14 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	094	05-Feb-2016	Re-apply filespec expansion to absolute one in
+"				DWIM case.
+"				Actions like |Split| don't work with explicit
+"				:cd and :set autochdir. Workaround this by
+"				skipping filespec shortening in
+"				s:ShortenFilespec() (not needed with :set
+"				autochdir, anyway). My autolcd.vim plugin
+"				instead temporarily turns off 'autochdir'.
 "	093	04-Feb-2016	DWIM: Better handling when passed a
 "				backslash-delimited Windows-style path on Unix.
 "	092	29-May-2015	ENH: Add "add to quickfix" option for multi-file
@@ -612,6 +620,17 @@ function! s:Query( msg, choices, default )
 endfunction
 
 function! s:ShortenFilespec( filespec )
+    if &autochdir " && expand('%:p:h') !=# getcwd()
+	" Unfortunately, the built-in :split commands do not work with
+	" 'autochdir' when the CWD has been changed, as the implementation does
+	" not take the directory change into account and doesn't translate the
+	" filespec after switching windows. To work around this, don't shorten
+	" the absolute filespec when 'autochdir' is set; it's not needed in that
+	" case, anyway (as the CWD will continuously change and buffer paths
+	" adapted).
+	return a:filespec
+    endif
+
     return fnamemodify(a:filespec, ':~:.')
 endfunction
 function! s:BufDeleteExisting( filespec )
