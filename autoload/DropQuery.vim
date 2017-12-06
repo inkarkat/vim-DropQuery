@@ -20,10 +20,12 @@
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2016 Ingo Karkat
+" Copyright: (C) 2005-2017 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	095	28-Nov-2017	Remove &argadd for multiple files if in blank
+"				window and there are no arguments yet.
 "	094	05-Feb-2016	Re-apply filespec expansion to absolute one in
 "				DWIM case.
 "				Actions like |Split| don't work with explicit
@@ -959,6 +961,12 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
+
+    let l:blankWindowNr = s:GetBlankWindowNr()
+    if l:blankWindowNr != -1 && l:blankWindowNr == winnr() && argc() == 0
+	call filter(l:actions, 'v:val != "&argadd"')
+    endif
+
     call s:QueryActionForArguments(l:actions, 1)
     if a:fileNum <= 4
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
