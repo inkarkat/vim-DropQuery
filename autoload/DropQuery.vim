@@ -24,6 +24,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	096	07-Dec-2017	ENH: DWIM: Introduce s:isLastDropToArgList and
+"				put "argadd" choice in front if the last (single
+"				or multiple) argument(s) was added, too.
 "	095	28-Nov-2017	Remove &argadd for multiple files if in blank
 "				window and there are no arguments yet.
 "	094	05-Feb-2016	Re-apply filespec expansion to absolute one in
@@ -501,6 +504,7 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
+let s:isLastDropToArgList = 0
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(ingo#escape#file#bufnameescape(a:filespec))
     return l:winNr != -1
@@ -885,6 +889,10 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
 	call insert(l:actions, '&new tab', -1)
 	call insert(l:actions, '&tab...', -1)
     endif
+    if s:isLastDropToArgList
+	" Move to the front; it's likely that the next file is meant to be added, too.
+	let l:actions = ['&argadd'] + filter(l:actions, 'v:val != "&argadd"')
+    endif
     if &l:previewwindow
 	if winnr('$') > winnr() && ! ingo#window#special#IsSpecialWindow(winnr() + 1)
 	    " When the current window is the preview window, replace the edit
@@ -1200,6 +1208,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	\)
     endif
 
+    let s:isLastDropToArgList = (l:dropAction =~# '^arg')
     try
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
@@ -1491,6 +1500,8 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 
     let l:exFileOptionsAndCommands = join(map(l:fileOptionsAndCommands, "escape(v:val, '\\ ')"))
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
+
+    let s:isLastDropToArgList = (l:dropAction =~# '^arg')
     try
 	if empty(l:dropAction)
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
