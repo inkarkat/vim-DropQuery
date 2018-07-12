@@ -24,6 +24,7 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	097	08-Dec-2017	Replace :doautocmd with ingo#event#Trigger().
 "	096	07-Dec-2017	ENH: DWIM: Introduce s:isLastDropToArgList and
 "				put "argadd" choice in front if the last (single
 "				or multiple) argument(s) was added, too.
@@ -1588,12 +1589,12 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'add to quickfix'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
-	    silent doautocmd QuickFixCmdPre DropQuery | " Allow hooking into the quickfix update.
+	    silent call ingo#event#Trigger('QuickFixCmdPre DropQuery') | " Allow hooking into the quickfix update.
 		call setqflist(map(
 		\   l:filespecs,
 		\   "{'filename': v:val, 'lnum': 1}"
 		\), 'a')
-	    silent doautocmd QuickFixCmdPost DropQuery | " Allow hooking into the quickfix update.
+	    silent call ingo#event#Trigger('QuickFixCmdPost DropQuery') | " Allow hooking into the quickfix update.
 	    " This just modifies the quickfix list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
