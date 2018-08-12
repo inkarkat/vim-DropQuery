@@ -20,10 +20,13 @@
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2017 Ingo Karkat
+" Copyright: (C) 2005-2018 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	098	13-Jul-2018	Use b:appendAfterLnum (if set) for
+"                               :MoveChangesHere. This allows filetypes (like
+"                               changelog, fortunes) to set the insert point.
 "	097	08-Dec-2017	Replace :doautocmd with ingo#event#Trigger().
 "	096	07-Dec-2017	ENH: DWIM: Introduce s:isLastDropToArgList and
 "				put "argadd" choice in front if the last (single
@@ -1393,7 +1396,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, [ a:filespec ])
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright split' . l:exFileOptionsAndCommands l:exfilespec
-	    execute '$MoveChangesHere'
+	    execute (exists('b:appendAfterLnum') ? b:appendAfterLnum : '$') . 'MoveChangesHere'
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
