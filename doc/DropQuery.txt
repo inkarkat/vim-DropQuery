@@ -37,7 +37,7 @@ USAGE							     *DropQuery-usage*
 			Automatically locate the visible {file}, use an empty
 			window for it, or ask where to open {file}. With [!],
 			always ask.
-:{range}Drop[!] [++opt] [+cmd] {glob} ...
+:{range}Drop[!] [++opt] [+cmd] [{glob} ...]
 			Treat each line in {range} (stripped of leading and
 			trailing whitespace) as a filespec / glob and ask
 			where to open those. {glob} can be used to optionally
@@ -66,7 +66,7 @@ To uninstall, use the |:RmVimball| command.
 DEPENDENCIES					      *DropQuery-dependencies*
 
 - Requires Vim 7.0 or higher.
-- Requires the |ingo-library.vim| plugin (vimscript #4433), version 1.021 or
+- Requires the |ingo-library.vim| plugin (vimscript #4433), version 1.023 or
   higher.
 
 ==============================================================================
@@ -122,7 +122,7 @@ First published version.
 Started development.
 
 ==============================================================================
-Copyright: (C) 2005-2014 Ingo Karkat
+Copyright: (C) 2005-2015 Ingo Karkat
 The VIM LICENSE applies to this plugin; see |copyright|.
 
 Maintainer:	Ingo Karkat <ingo@karkat.de>
