@@ -24,6 +24,9 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	099	13-Aug-2018	BUG: After "open new tab and ask again",
+"                               |argadd| is still offered (even though there's
+"                               now a blank window).
 "	098	13-Jul-2018	Use b:appendAfterLnum (if set) for
 "                               :MoveChangesHere. This allows filetypes (like
 "                               changelog, fortunes) to set the insert point.
@@ -994,7 +997,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 	if l:dropAction ==# 'open new tab and ask again'
 	    execute tabpagenr('$') . 'tabnew'
 	    redraw! " Without this, the new blank tab page isn't visible.
-	    call filter(l:actions, 'v:val !~# "^.\\?open .\\?new .\\?tab\\|^.\\?new .\\?tab"')
+	    call filter(l:actions, 'v:val !~# "^.\\?open .\\?new .\\?tab\\|^.\\?new .\\?tab" . (argc() == 0 ? "\\|^.\\?argadd" : "")')
 	elseif l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
 	    call filter(l:actions, 'v:val !~# "^.\\?readonly"')
