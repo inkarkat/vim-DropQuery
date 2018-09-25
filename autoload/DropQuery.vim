@@ -24,6 +24,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	100	25-Sep-2018	Refactoring: Use
+"                               ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine().
 "	099	13-Aug-2018	BUG: After "open new tab and ask again",
 "                               |argadd| is still offered (even though there's
 "                               now a blank window).
@@ -1179,7 +1181,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "*******************************************************************************
 "****D echomsg '**** Dropped filespec' string(a:filespec) 'options' string(a:fileOptionsAndCommands)
     let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
-    let l:exFileOptionsAndCommands = join(map(a:fileOptionsAndCommands, "escape(v:val, '\\ ')"))
+    let l:exFileOptionsAndCommands = ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine(a:fileOptionsAndCommands)
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
     let l:dropAttributes = {'readonly': 0}
 "****D echomsg '****' string(l:exFileOptionsAndCommands) string(l:exfilespec)
@@ -1505,7 +1507,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     let l:isMovedAway = s:MoveAwayAndRefresh()
     let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
 
-    let l:exFileOptionsAndCommands = join(map(l:fileOptionsAndCommands, "escape(v:val, '\\ ')"))
+    let l:exFileOptionsAndCommands = ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine(l:fileOptionsAndCommands)
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
 
     let s:isLastDropToArgList = (l:dropAction =~# '^arg')
