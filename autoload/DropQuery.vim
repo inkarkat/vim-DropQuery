@@ -30,6 +30,13 @@
 "                               we cannot do this for s:ExecuteForEachFile(),
 "                               because of a:specialFirstExcommand and sometimes
 "                               additional options are inserted in a:excommand.
+"                               FIX: Adding ingo#escape#Unescape() in 075 was
+"                               just a workaround. Actually, the problem is that
+"                               the join-escaping of a:fileOptionsAndCommands
+"                               (now done in
+"                               ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine()
+"                               clobbered the original List. With that fixed,
+"                               there's no need for unescaping any longer.
 "	100	25-Sep-2018	Refactoring: Use
 "                               ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine().
 "	099	13-Aug-2018	BUG: After "open new tab and ask again",
@@ -1161,7 +1168,7 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 	    " Cannot execute ++enc and ++bad outside of :edit; ++edit only
 	    " applies to :read.
 	elseif l:fileOptionOrCommand =~# '^+'
-	    execute ingo#escape#Unescape(l:fileOptionOrCommand[1:], '\ ')
+	    execute l:fileOptionOrCommand[1:]
 	else
 	    throw 'Invalid file option / command: ' . l:fileOptionOrCommand
 	endif
