@@ -7,7 +7,7 @@
 "   - DropQuery.vim autoload script
 "   - ingo/err.vim autoload script
 "
-" Copyright: (C) 2005-2015 Ingo Karkat
+" Copyright: (C) 2005-2019 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
@@ -306,8 +306,8 @@
 "				BF: HP-UX GVIM 6.3 confirm() returns -1 instead
 "				of 0 when dialog is aborted.
 "       0.03    18-Jul-2005     Added preference ':belowright' for both splits.
-"                               In general, I'd like to keep the default
-"                               ':set nosplitbelow', though.
+"				In general, I'd like to keep the default
+"				':set nosplitbelow', though.
 "	0.02	01-Jun-2005	ENH: if dropped file is already visible; simply
 "				activate the corresponding window.
 "	0.01	23-May-2005	file creation
