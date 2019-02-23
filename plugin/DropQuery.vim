@@ -7,10 +7,12 @@
 "   - DropQuery.vim autoload script
 "   - ingo/err.vim autoload script
 "
-" Copyright: (C) 2005-2014 Ingo Karkat
+" Copyright: (C) 2005-2015 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	066	13-Feb-2015	Return success status also from
+"				DropQuery#DropBuffer().
 "	065	22-Oct-2014	Add g:DropQuery_FilespecProcessor to allow hook
 "				functions to tweak the opened filespecs.
 "	064	29-Sep-2014	ENH: :Drop takes an optional range to treat
@@ -365,7 +367,7 @@ endif
 " arguments.
 command! -bang -range=-1 -nargs=* -complete=file Drop if ! DropQuery#Drop(<bang>0, <q-args>, (<count> == -1 ? [] : [<line1>, <line2>]))| echoerr ingo#err#Get() | endif
 
-command! -bang -count=0 -nargs=? -complete=buffer BufDrop call DropQuery#DropBuffer(<bang>0, <count>, <f-args>)
+command! -bang -count=0 -nargs=? -complete=buffer BufDrop if ! DropQuery#DropBuffer(<bang>0, <count>, <f-args>) | echoerr ingo#err#Get() | endif
 
 if g:DropQuery_RemapDrop
     cabbrev <expr> drop (getcmdtype() == ':' && strpart(getcmdline(), 0, getcmdpos() - 1) =~# '^\s*drop$' ? 'Drop' : 'drop')
