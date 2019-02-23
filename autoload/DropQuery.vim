@@ -20,10 +20,13 @@
 "   - ingo/window/special.vim autoload script
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2018 Ingo Karkat
+" Copyright: (C) 2005-2019 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	102	14-Jan-2019	ENH: Add "read here" action that :read's the
+"                               file contents into the current buffer's current
+"                               line.
 "	101	26-Sep-2018	Refactoring: Pass a:exFileOptionsAndCommands to
 "                               s:ExternalGvimForEachFile() instead of
 "                               concatenating with a:openCommand. Unfortunately,
@@ -967,6 +970,9 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
+    if ! a:isNonexisting && &l:modifiable && ! &l:readonly
+	call add(l:actions, 'read here')
+    endif
 
     while 1
 	let l:dropAction = s:Query(a:querytext, l:actions, 1)
@@ -1006,6 +1012,10 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
 
+    if &l:modifiable && ! &l:readonly
+	call add(l:actions, 'read here')
+    endif
+
     " Avoid "E36: Not enough room" when trying to open more splits than
     " possible.
     if a:fileNum > &lines   | call filter(l:actions, 'v:val !=# "&split" && v:val !=# "s&how"')  | endif
@@ -1033,7 +1043,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isEmpty )
     let l:dropAttributes = {'readonly': 0}
 
     let l:otherVims = s:GetOtherVims()
@@ -1066,6 +1076,9 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     endif
     if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
+    endif
+    if ! a:isEmpty && &l:modifiable && ! &l:readonly
+	call add(l:actions, 'read here')
     endif
 
     let l:dropAction = s:Query(a:querytext, l:actions, 1)
@@ -1418,6 +1431,9 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright split' l:exFileOptionsAndCommands l:exfilespec
 	    execute (exists('b:appendAfterLnum') ? b:appendAfterLnum : '$') . 'MoveChangesHere'
+	elseif l:dropAction ==# 'read here'
+	    execute 'keepalt read' l:exFileOptionsAndCommands l:exfilespec
+	    normal! ']
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -1671,6 +1687,9 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'other GVIM'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 	    call s:OtherGvimForEachFile(l:dropAttributes.servername, l:exFileOptionsAndCommands, l:filespecs)
+	elseif l:dropAction ==# 'read here'
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+	    call s:ExecuteForEachFile('keepalt read ' . l:exFileOptionsAndCommands, '', l:filespecs, "normal! ']")
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
@@ -1728,8 +1747,9 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	let l:isInBuffer = (l:bufNr == bufnr(''))
 	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:isMovedAway = s:MoveAwayAndRefresh()
+	let l:isEmpty = ingo#buffer#IsEmpty(l:bufNr)
 	let l:querytext = printf('Action for %s buffer #%d%s?',
-	\   (l:isInBuffer ? 'this' : 'dropped'),
+	\   (l:isInBuffer ? 'this' : 'dropped') . (l:isEmpty ? ' empty' : ''),
 	\   l:bufNr,
 	\   (empty(l:bufName) ? '' : ': ' . l:bufName)
 	\)
@@ -1739,7 +1759,8 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	\   l:isVisibleWindow,
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
-	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr())
+	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr()),
+	\   l:isEmpty
 	\)
     endif
 
@@ -1866,6 +1887,9 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	elseif l:dropAction ==# 'move scratch contents there'
 	    execute 'belowright sbuffer' l:bufNr
 	    execute '$MoveChangesHere'
+	elseif l:dropAction ==# 'read here'
+	    execute 'keepalt read' l:exFileOptionsAndCommands l:exfilespec
+	    normal! ']
 	else
 	    throw 'Invalid dropAction: ' . l:dropAction
 	endif
