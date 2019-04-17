@@ -25,29 +25,29 @@
 "
 " REVISION	DATE		REMARKS
 "	102	14-Jan-2019	ENH: Add "read here" action that :read's the
-"                               file contents into the current buffer's current
-"                               line.
+"				file contents into the current buffer's current
+"				line.
 "	101	26-Sep-2018	Refactoring: Pass a:exFileOptionsAndCommands to
-"                               s:ExternalGvimForEachFile() instead of
-"                               concatenating with a:openCommand. Unfortunately,
-"                               we cannot do this for s:ExecuteForEachFile(),
-"                               because of a:specialFirstExcommand and sometimes
-"                               additional options are inserted in a:excommand.
-"                               FIX: Adding ingo#escape#Unescape() in 075 was
-"                               just a workaround. Actually, the problem is that
-"                               the join-escaping of a:fileOptionsAndCommands
-"                               (now done in
-"                               ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine()
-"                               clobbered the original List. With that fixed,
-"                               there's no need for unescaping any longer.
+"				s:ExternalGvimForEachFile() instead of
+"				concatenating with a:openCommand. Unfortunately,
+"				we cannot do this for s:ExecuteForEachFile(),
+"				because of a:specialFirstExcommand and sometimes
+"				additional options are inserted in a:excommand.
+"				FIX: Adding ingo#escape#Unescape() in 075 was
+"				just a workaround. Actually, the problem is that
+"				the join-escaping of a:fileOptionsAndCommands
+"				(now done in
+"				ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine()
+"				clobbered the original List. With that fixed,
+"				there's no need for unescaping any longer.
 "	100	25-Sep-2018	Refactoring: Use
-"                               ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine().
+"				ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine().
 "	099	13-Aug-2018	BUG: After "open new tab and ask again",
-"                               |argadd| is still offered (even though there's
-"                               now a blank window).
+"				|argadd| is still offered (even though there's
+"				now a blank window).
 "	098	13-Jul-2018	Use b:appendAfterLnum (if set) for
-"                               :MoveChangesHere. This allows filetypes (like
-"                               changelog, fortunes) to set the insert point.
+"				:MoveChangesHere. This allows filetypes (like
+"				changelog, fortunes) to set the insert point.
 "	097	08-Dec-2017	Replace :doautocmd with ingo#event#Trigger().
 "	096	07-Dec-2017	ENH: DWIM: Introduce s:isLastDropToArgList and
 "				put "argadd" choice in front if the last (single
@@ -521,8 +521,8 @@
 "				BF: HP-UX GVIM 6.3 confirm() returns -1 instead
 "				of 0 when dialog is aborted.
 "       0.03    18-Jul-2005     Added preference ':belowright' for both splits.
-"                               In general, I'd like to keep the default
-"                               ':set nosplitbelow', though.
+"				In general, I'd like to keep the default
+"				':set nosplitbelow', though.
 "	0.02	01-Jun-2005	ENH: if dropped file is already visible; simply
 "				activate the corresponding window.
 "	0.01	23-May-2005	file creation
