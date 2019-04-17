@@ -3,27 +3,14 @@
 " Maintainer:	Ingo Karkat <ingo@karkat.de>
 "
 " DEPENDENCIES:
-"   - ingo/actions.vim autoload script
-"   - ingo/buffer.vim autoload script
-"   - ingo/cmdargs/file.vim autoload script
-"   - ingo/cmdargs/glob.vim autoload script
-"   - ingo/compat.vim autoload script
-"   - ingo/err.vim autoload script
-"   - ingo/escape.vim autoload script
-"   - ingo/escape/file.vim autoload script
-"   - ingo/external.vim autoload script
-"   - ingo/fs/path.vim autoload script
-"   - ingo/msg.vim autoload script
-"   - ingo/query.vim autoload script
-"   - ingo/window/preview.vim autoload script
-"   - ingo/window/quickfix.vim autoload script
-"   - ingo/window/special.vim autoload script
+"   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
 " Copyright: (C) 2005-2019 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	103	18-Apr-2019	Refactoring: Extract s:EchoArgsSummary().
 "	102	14-Jan-2019	ENH: Add "read here" action that :read's the
 "				file contents into the current buffer's current
 "				line.
@@ -1187,6 +1174,12 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 	endif
     endfor
 endfunction
+function! s:EchoArgsSummary() abort
+    " Since :argadd doesn't change the currently edited file, and there
+    " thus is no clash with an "edit file" message, show the new
+    " argument list as a courtesy.
+    args
+endfunction
 
 function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCommands )
 "*******************************************************************************
@@ -1299,11 +1292,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
-
-	    " Since :argadd doesn't change the currently edited file, and there
-	    " thus is no clash with an "edit file" message, show the new
-	    " argument list as a courtesy.
-	    args
+	    call s:EchoArgsSummary()
 	elseif l:dropAction ==# 'arg+add'
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
 	    " Try to make the current buffer the current argument; this fails
@@ -1317,11 +1306,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
-
-	    " Since :argadd doesn't change the currently edited file, and there
-	    " thus is no clash with an "edit file" message, show the new
-	    " argument list as a courtesy.
-	    args
+	    call s:EchoArgsSummary()
 	elseif l:dropAction ==# 'badd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
@@ -1586,11 +1571,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither.
-
-	    " Since :argadd doesn't change the currently edited file, and there
-	    " thus is no clash with an "edit file" message, show the new
-	    " argument list as a courtesy.
-	    args
+	    call s:EchoArgsSummary()
 	elseif l:dropAction ==# 'arg+add'
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
 	    " Try to make the current buffer the current argument; this fails
@@ -1604,11 +1585,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither.
-
-	    " Since :argadd doesn't change the currently edited file, and there
-	    " thus is no clash with an "edit file" message, show the new
-	    " argument list as a courtesy.
-	    args
+	    call s:EchoArgsSummary()
 	elseif l:dropAction ==# 'badd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
