@@ -11,6 +11,10 @@
 "
 " REVISION	DATE		REMARKS
 "	103	18-Apr-2019	Refactoring: Extract s:EchoArgsSummary().
+"				Pass [number of] added filespec[s], print
+"				(single-line) summary instead of full :args
+"				output; the hit-enter prompt after multiline
+"				output is annoying.
 "	102	14-Jan-2019	ENH: Add "read here" action that :read's the
 "				file contents into the current buffer's current
 "				line.
@@ -1174,11 +1178,8 @@ function! s:ExecuteFileOptionsAndCommands( fileOptionsAndCommands )
 	endif
     endfor
 endfunction
-function! s:EchoArgsSummary() abort
-    " Since :argadd doesn't change the currently edited file, and there
-    " thus is no clash with an "edit file" message, show the new
-    " argument list as a courtesy.
-    args
+function! s:EchoArgsSummary( whatAdded ) abort
+    echomsg printf('Now %d argument%s, added %s', argc(), (argc() == 1 ? '' : 's'), a:whatAdded)
 endfunction
 
 function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCommands )
@@ -1292,7 +1293,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
-	    call s:EchoArgsSummary()
+	    call s:EchoArgsSummary(a:filespec)
 	elseif l:dropAction ==# 'arg+add'
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
 	    " Try to make the current buffer the current argument; this fails
@@ -1306,7 +1307,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
-	    call s:EchoArgsSummary()
+	    call s:EchoArgsSummary(a:filespec)
 	elseif l:dropAction ==# 'badd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
@@ -1571,7 +1572,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither.
-	    call s:EchoArgsSummary()
+	    call s:EchoArgsSummary(len(l:filespecs) . ' files')
 	elseif l:dropAction ==# 'arg+add'
 	    call s:ExecuteWithoutWildignore(argc() . 'argadd', [expand('%')])
 	    " Try to make the current buffer the current argument; this fails
@@ -1585,7 +1586,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " :argadd just modifies the argument list; l:dropAttributes.readonly
 	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
 	    " neither.
-	    call s:EchoArgsSummary()
+	    call s:EchoArgsSummary(len(l:filespecs) . ' files')
 	elseif l:dropAction ==# 'badd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
