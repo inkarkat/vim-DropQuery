@@ -147,8 +147,8 @@
 "	072	08-Aug-2013	Move escapings.vim into ingo-library.
 "	071	03-Jul-2013	BUG: Invalid buffer drop action "open"; the
 "				correct name is "edit".
-"			    	Move ingoactions.vim into ingo-library.
-"   	070	14-Jun-2013	Minor: Make substitute() robust against
+"				Move ingoactions.vim into ingo-library.
+"	070	14-Jun-2013	Minor: Make substitute() robust against
 "				'ignorecase'.
 "	069	01-Jun-2013	Move ingofileargs.vim into ingo-library.
 "	068	29-May-2013	Extract s:IsBlankBuffer() and
