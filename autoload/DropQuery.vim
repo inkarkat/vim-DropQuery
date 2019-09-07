@@ -10,6 +10,8 @@
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
+"	104	10-Jul-2019	Refactoring: Move s:HasDiffWindow() to
+"                               ingo-library.
 "	103	18-Apr-2019	Refactoring: Extract s:EchoArgsSummary().
 "				Pass [number of] added filespec[s], print
 "				(single-line) summary instead of full :args
@@ -588,10 +590,6 @@ function! s:GetTabPageNr( targetBufNr )
 	endfor
     endfor
     return -1
-endfunction
-function! s:HasDiffWindow()
-    let l:diffedWinNrs = filter( range(1, winnr('$')), 'getwinvar(v:val, "&diff")' )
-    return ! empty(l:diffedWinNrs)
 endfunction
 function! s:GetOtherVims()
     return filter(
@@ -1254,7 +1252,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	elseif l:dropAction ==# 'view'
 	    execute 'confirm view' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'diff'
-	    if ! s:HasDiffWindow()
+	    if ! ingo#window#special#HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
 		" read-only.
 		diffthis
@@ -1749,7 +1747,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	elseif l:dropAction ==# 'edit'
 	    execute 'confirm buffer' l:bufNr
 	elseif l:dropAction ==# 'diff'
-	    if ! s:HasDiffWindow()
+	    if ! ingo#window#special#HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
 		" read-only.
 		diffthis
