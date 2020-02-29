@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2019 Ingo Karkat
+" Copyright: (C) 2005-2020 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 "
 " REVISION	DATE		REMARKS
@@ -1605,12 +1605,12 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'add to quickfix'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
-	    silent call ingo#event#Trigger('QuickFixCmdPre DropQuery') | " Allow hooking into the quickfix update.
+	    call ingo#window#quickfix#CmdPre(1, 'DropQuery')
 		call setqflist(map(
 		\   l:filespecs,
 		\   "{'filename': v:val, 'lnum': 1}"
 		\), 'a')
-	    silent call ingo#event#Trigger('QuickFixCmdPost DropQuery') | " Allow hooking into the quickfix update.
+	    call ingo#window#quickfix#CmdPost(1, 'DropQuery')
 	    " This just modifies the quickfix list; l:dropAttributes.readonly
 	    " doesn't apply here. l:exFileOptionsAndCommands isn't supported,
 	    " neither.
