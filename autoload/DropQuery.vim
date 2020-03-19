@@ -669,7 +669,7 @@ function! s:EchoArgsSummary( whatAdded ) abort
     echomsg printf('Now %d argument%s, added %s', argc(), (argc() == 1 ? '' : 's'), a:whatAdded)
 endfunction
 
-function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCommands )
+function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
 "   Prompts the user for the action to be taken with the dropped file.
@@ -682,6 +682,8 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 "		    instead.
 "   a:filespec	    Filespec of the dropped file. It is already expanded to an
 "		    absolute path by DropQuery#Drop().
+"   a:isExisting    Flag whether the passed a:filespec exists in the file
+"                   system.
 "   a:querytext	    Text to be presented to the user.
 "   a:fileOptionsAndCommands	List containing all optional file options and
 "				commands.
@@ -707,7 +709,6 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:dropAction = 'goto window'
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
-	let l:isNonexisting = ! ingo#fs#path#Exists(a:filespec)
 	let l:hasOtherBuffers = ingo#buffer#ExistOtherBuffers(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
 	let l:hasOtherWindows = (winnr('$') > 1)
 	let l:bufNr = bufnr(ingo#escape#file#bufnameescape(a:filespec))
@@ -716,7 +717,7 @@ function! s:DropSingleFile( isForceQuery, filespec, querytext, fileOptionsAndCom
 	let l:isMovedAway = s:MoveAwayAndRefresh()
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
 	\   (l:isInBuffer ? substitute(a:querytext, '^\CAction for ', '&this buffer ', '') : a:querytext),
-	\   l:isNonexisting,
+	\   a:isExisting,
 	\   l:hasOtherBuffers,
 	\   l:hasOtherWindows,
 	\   l:isVisibleWindow,
@@ -1004,7 +1005,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	call ingo#msg#WarningMsg(printf("The file pattern '%s' resulted in no matches.", a:filePatternsString))
 	return -1
     elseif l:statistics.files == 1
-	return s:DropSingleFile(a:isForceQuery, l:filespecs[0], s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
+	return s:DropSingleFile(a:isForceQuery, l:filespecs[0], l:statistics.nonexisting == 0, s:BuildQueryText(l:filespecs, l:statistics), l:fileOptionsAndCommands)
     endif
 
     let l:originalWinNr = winnr()
@@ -1043,7 +1044,8 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 		if l:success == 1
 		    redraw  " Otherwise, the individual drop result (e.g. a split window) wouldn't be visible yet.
 		endif
-		let l:success = (s:DropSingleFile(1, l:filespec, s:BuildQueryText([l:filespec], {'files': 1, 'removed': 0, 'nonexisting': 0}), l:fileOptionsAndCommands) == 1)
+		let l:isExisting = (ingo#fs#path#Exists(l:filespec) || ingo#cmdargs#glob#IsSpecialFile(l:filespec))
+		let l:success = (s:DropSingleFile(1, l:filespec, l:isExisting, s:BuildQueryText([l:filespec], {'files': 1, 'removed': 0, 'nonexisting': (l:isExisting ? 0 : 1)}), l:fileOptionsAndCommands) == 1)
 		if ! l:success
 		    " Need to print this here to fit into the interactive flow.
 		    call ingo#msg#ErrorMsg(ingo#err#Get())
@@ -1206,7 +1208,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
     elseif ! l:isForceQuery && l:isVisibleWindow
 	let l:dropAction = 'goto window'
     elseif ingo#fs#path#Exists(l:bufName)
-	return s:DropSingleFile(l:isForceQuery, l:bufName, printf('Action for %s?', l:bufName), [])
+	return s:DropSingleFile(l:isForceQuery, l:bufName, 1, printf('Action for %s?', l:bufName), [])
     else
 	let l:blankWindowNr = s:GetBlankWindowNr()
 	let l:isInBuffer = (l:bufNr == bufnr(''))
