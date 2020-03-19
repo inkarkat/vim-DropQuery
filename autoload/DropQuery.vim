@@ -374,7 +374,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -383,7 +383,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     " file does not exist. This way, the user can cancel the dropping if he
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
-    let l:editAction = (a:isNonexisting ? '&create' : '&edit')
+    let l:editAction = (a:isExisting ? '&edit' : '&create')
     let l:otherVims = s:GetOtherVims()
     let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
     if a:hasOtherWindows
@@ -416,7 +416,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if a:isInBuffer
 	call remove(l:actions, 0)
     endif
-    if ! a:isNonexisting
+    if a:isExisting
 	if ! a:isInBuffer
 	    call insert(l:actions, 'v&iew', 1)
 	endif
@@ -433,7 +433,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if a:hasOtherBuffers
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
-    if ! a:isNonexisting && ! a:isBlankWindow && ! a:isInBuffer
+    if a:isExisting && ! a:isBlankWindow && ! a:isInBuffer
 	call insert(l:actions, '&diff', index(l:actions, '&split'))
     endif
     if a:isBlankWindow
@@ -448,7 +448,7 @@ function! s:QueryActionForSingleFile( querytext, isNonexisting, hasOtherBuffers,
     if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
-    if ! a:isNonexisting && &l:modifiable && ! &l:readonly
+    if a:isExisting && &l:modifiable && ! &l:readonly
 	call add(l:actions, 'read here')
     endif
 
