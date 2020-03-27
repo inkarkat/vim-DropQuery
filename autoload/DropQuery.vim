@@ -321,7 +321,7 @@ function! s:BuildQueryText( filespecs, statistics )
 endfunction
 function! s:QueryActionForArguments( actions, isMultipleFiles )
     let l:idx = index(a:actions, 'ar&gedit')
-    if argc() == 0 && ! empty(bufname('')) && ! ingo#buffer#ExistOtherBuffers(bufnr(''))
+    if argc() == 0 && ! empty(bufname('')) && winnr('$') == 1
 	" There is only the current buffer (which might have been :Drop'ed
 	" before). As the plugin doesn't ask for the first buffer (and just
 	" :edit's it), but we might want to collect all dropped files into the
