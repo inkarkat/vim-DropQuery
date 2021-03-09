@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2020 Ingo Karkat
+" Copyright: (C) 2005-2021 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -374,7 +374,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -419,6 +419,18 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     if a:isExisting
 	if ! a:isInBuffer
 	    call insert(l:actions, 'v&iew', 1)
+	    if a:hasOtherDiffWindow
+		if &l:diff
+		    " Keep the current window participating in the diff. This
+		    " means that we cannot use DropQuery to unjoin a window from
+		    " a diff, but there are several other options to do such
+		    " (e.g. splitting and closing the previous window).
+		    let l:actions[0] = 'diffthis'
+		else
+		    " Offer to replace the current buffer and join in the diff.
+		    call insert(l:actions, 'diffthis', 1)
+		endif
+	    endif
 	endif
 	let l:previewIdx = index(l:actions, '&preview')
 	if l:previewIdx != -1
@@ -434,7 +446,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if a:isExisting && ! a:isBlankWindow && ! a:isInBuffer
-	call insert(l:actions, '&diff', index(l:actions, '&split'))
+	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
     endif
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
@@ -487,7 +499,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     call s:QueryActionForArguments(l:actions, 1)
     if a:fileNum <= 4
-	call insert(l:actions, '&diff', index(l:actions, '&split'))
+	call insert(l:actions, '&diffsplit', index(l:actions, '&split'))
     endif
 
     if &l:modifiable && ! &l:readonly
@@ -544,7 +556,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
     elseif ! a:isInBuffer
-	call insert(l:actions, '&diff', index(l:actions, '&split'))
+	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
     endif
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
@@ -720,6 +732,7 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	\   a:isExisting,
 	\   l:hasOtherBuffers,
 	\   l:hasOtherWindows,
+	\   ingo#window#special#HasOtherDiffWindow(),
 	\   l:isVisibleWindow,
 	\   l:isLoaded,
 	\   l:isInBuffer,
@@ -741,7 +754,10 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'view'
 	    execute 'confirm view' l:exFileOptionsAndCommands l:exfilespec
-	elseif l:dropAction ==# 'diff'
+	elseif l:dropAction ==# 'diffthis'
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+	    diffthis
+	elseif l:dropAction ==# 'diffsplit'
 	    if ! ingo#window#special#HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
 		" read-only.
@@ -1109,7 +1125,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    " thus is no clash with an "edit file" message, notify about the
 	    " total and number of added entries as a courtesy.
 	    echo printf('Add %d entries; total now is %d', len(l:filespecs), len(getqflist()))
-	elseif l:dropAction ==# 'diff'
+	elseif l:dropAction ==# 'diffsplit'
 	    call s:ExecuteForEachFile(
 	    \	(&diffopt =~# 'vertical' ? 'vertical' : '') . ' ' . 'belowright ' . (l:dropAttributes.readonly ? 'sview' : 'split') . l:exFileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
@@ -1237,7 +1253,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	    call ingo#msg#WarningMsg('Canceled opening of buffer #' . l:bufNr)
 	elseif l:dropAction ==# 'edit'
 	    execute 'confirm buffer' l:bufNr
-	elseif l:dropAction ==# 'diff'
+	elseif l:dropAction ==# 'diffsplit'
 	    if ! ingo#window#special#HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
 		" read-only.
