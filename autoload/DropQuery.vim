@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2020 Ingo Karkat
+" Copyright: (C) 2005-2021 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -374,7 +374,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -419,6 +419,18 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     if a:isExisting
 	if ! a:isInBuffer
 	    call insert(l:actions, 'v&iew', 1)
+	    if a:hasOtherDiffWindow
+		if &l:diff
+		    " Keep the current window participating in the diff. This
+		    " means that we cannot use DropQuery to unjoin a window from
+		    " a diff, but there are several other options to do such
+		    " (e.g. splitting and closing the previous window).
+		    let l:actions[0] = 'diffthis'
+		else
+		    " Offer to replace the current buffer and join in the diff.
+		    call insert(l:actions, 'diffthis', 1)
+		endif
+	    endif
 	endif
 	let l:previewIdx = index(l:actions, '&preview')
 	if l:previewIdx != -1
@@ -720,6 +732,7 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	\   a:isExisting,
 	\   l:hasOtherBuffers,
 	\   l:hasOtherWindows,
+	\   ingo#window#special#HasOtherDiffWindow(),
 	\   l:isVisibleWindow,
 	\   l:isLoaded,
 	\   l:isInBuffer,
@@ -741,6 +754,9 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'view'
 	    execute 'confirm view' l:exFileOptionsAndCommands l:exfilespec
+	elseif l:dropAction ==# 'diffthis'
+	    execute 'confirm' (l:dropAttributes.readonly ? 'view' : 'edit') l:exFileOptionsAndCommands l:exfilespec
+	    diffthis
 	elseif l:dropAction ==# 'diffsplit'
 	    if ! ingo#window#special#HasDiffWindow()
 		" Emulate :diffsplit because it doesn't allow to open the file
