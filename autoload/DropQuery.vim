@@ -434,7 +434,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
     endif
     if a:isExisting && ! a:isBlankWindow && ! a:isInBuffer
-	call insert(l:actions, '&diffsplit', index(l:actions, '&split'))
+	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
     endif
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
@@ -544,7 +544,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     if a:isBlankWindow
 	call insert(l:actions, 'use &blank window')
     elseif ! a:isInBuffer
-	call insert(l:actions, '&diffsplit', index(l:actions, '&split'))
+	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
     endif
     if a:isOpenInAnotherTabPage
 	call insert(l:actions, '&goto tab')
