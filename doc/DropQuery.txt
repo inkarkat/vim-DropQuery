@@ -95,8 +95,9 @@ To exempt certain windows from being targets for direct dropping, and move
 away from them before querying for a drop action, you can define predicate
 expressions or Funcrefs to characterize such windows in the following List: >
     let g:DropQuery_MoveAwayPredicates = ["&filetype == 'scratch'"]
-<
-			*g:DropQuery_FilespecProcessor*
+By default, the plugin moves away from |terminal-window|s, assuming you don't
+want to replace a running session with an opened file.
+					       *g:DropQuery_FilespecProcessor*
 If you want to process individual filespecs passed to |:Drop|, you can hook in
 a processor function that takes a single filespec (or file glob), and returns
 this changed or unchanged: >

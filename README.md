@@ -90,6 +90,9 @@ expressions or Funcrefs to characterize such windows in the following List:
 
     let g:DropQuery_MoveAwayPredicates = ["&filetype == 'scratch'"]
 
+By default, the plugin moves away from |terminal-window|s, assuming you don't
+want to replace a running session with an opened file.
+
 If you want to process individual filespecs passed to :Drop, you can hook in
 a processor function that takes a single filespec (or file glob), and returns
 this changed or unchanged:

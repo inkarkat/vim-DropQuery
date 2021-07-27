@@ -6,7 +6,7 @@
 "   - Requires Vim 7.0 or higher.
 "   - ingo-library.vim plugin
 "
-" Copyright: (C) 2005-2020 Ingo Karkat
+" Copyright: (C) 2005-2021 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 
 " Avoid installing twice or when in unsupported Vim version.
@@ -24,7 +24,7 @@ if ! exists('g:DropQuery_NoPopup')
     let g:DropQuery_NoPopup = 0
 endif
 if ! exists('g:DropQuery_MoveAwayPredicates')
-    let g:DropQuery_MoveAwayPredicates = []
+    let g:DropQuery_MoveAwayPredicates = ['&buftype ==# "terminal"']
 endif
 if ! exists('g:DropQuery_PopupFocusCommand')
     " Focus on the popup dialog requires that activation of Vim from the
