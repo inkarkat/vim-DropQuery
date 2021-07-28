@@ -374,7 +374,7 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow )
+function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isCurrentWindowAvailable )
     let l:dropAttributes = {'readonly': 0}
 
     " The :edit command can be used to both edit an existing file and create a
@@ -383,10 +383,14 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     " file does not exist. This way, the user can cancel the dropping if he
     " doesn't want to create a new file (and mistakenly thought the dropped file
     " already existed).
-    let l:editAction = (a:isExisting ? '&edit' : '&create')
+    let l:editAction = (a:isCurrentWindowAvailable ? (a:isExisting ? '&edit' : '&create') : '')
     let l:otherVims = s:GetOtherVims()
-    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit']
-    if a:hasOtherWindows
+    let l:actions = []
+    if ! empty(l:editAction)
+	call add(l:actions, l:editAction)
+    endif
+    call extend(l:actions, ['&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit'])
+    if a:hasOtherWindows && ! empty(l:editAction)
 	call add(l:actions, '&only')
     endif
     call add(l:actions, 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...'))
@@ -404,7 +408,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	" Move to the front; it's likely that the next file is meant to be added, too.
 	let l:actions = ['&argadd'] + filter(l:actions, 'v:val !=# "&argadd"')
     endif
-    if &l:previewwindow
+    if &l:previewwindow && ! empty(l:editAction)
 	if winnr('$') > winnr() && ! ingo#window#special#IsSpecialWindow(winnr() + 1)
 	    " When the current window is the preview window, replace the edit
 	    " action with a special "edit below" action that corresponds to the
@@ -417,12 +421,14 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	    let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val !=# "&preview"')
 	endif
     endif
-    if a:isInBuffer
+    if a:isInBuffer && ! empty(l:editAction)
 	call remove(l:actions, 0)
     endif
     if a:isExisting
 	if ! a:isInBuffer
-	    call insert(l:actions, 'v&iew', 1)
+	    if ! empty(l:editAction)
+		call insert(l:actions, 'v&iew', 1)
+	    endif
 	    if a:hasOtherDiffWindow
 		if &l:diff
 		    " Keep the current window participating in the diff. This
@@ -595,6 +601,15 @@ function! s:IsMoveAway()
     endfor
     return 0
 endfunction
+function! s:IsExempt()
+    for l:Predicate in g:DropQuery_ExemptPredicates
+	if ingo#actions#EvaluateOrFunc(l:Predicate)
+	    return 1
+	endif
+	unlet l:Predicate   " The type might change, avoid E706.
+    endfor
+    return 0
+endfunction
 function! s:MoveAway()
     if winnr('$') == 1
 	return 0 " Nowhere to turn to.
@@ -741,7 +756,8 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	\   l:isLoaded,
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
-	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr())
+	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr()),
+	\   ! s:IsExempt()
 	\)
     endif
 
