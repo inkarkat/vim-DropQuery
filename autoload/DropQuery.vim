@@ -385,7 +385,11 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     " already existed).
     let l:editAction = (a:isExisting ? '&edit' : '&create')
     let l:otherVims = s:GetOtherVims()
-    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit', '&only', 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
+    let l:actions = [l:editAction, '&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit']
+    if a:hasOtherWindows
+	call add(l:actions, '&only')
+    endif
+    call add(l:actions, 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...'))
     if a:hasOtherWindows
 	call insert(l:actions, '&window...', -1)
     endif
@@ -443,7 +447,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     endif
     call s:QueryActionForArguments(l:actions, 0)
     if a:hasOtherBuffers
-	call insert(l:actions, '&fresh', index(l:actions, '&only') + 1)
+	call insert(l:actions, '&fresh', max([index(l:actions, '&only'), index(l:actions, 'ar&gedit')]) + 1)
     endif
     if a:isExisting && ! a:isBlankWindow && ! a:isInBuffer
 	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
