@@ -467,7 +467,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
     endif
-    if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && ingo#buffer#IsScratch() && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
     if a:isExisting && &l:modifiable && ! &l:readonly
@@ -584,7 +584,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
     endif
-    if ! a:isInBuffer && &l:modified && ! ingo#fs#path#Exists(expand('%')) && exists(':MoveChangesHere') == 2
+    if ! a:isInBuffer && ingo#buffer#IsScratch() && exists(':MoveChangesHere') == 2
 	call insert(l:actions, '&move scratch contents there', 1)
     endif
     if ! a:isEmpty && &l:modifiable && ! &l:readonly
