@@ -24,7 +24,10 @@ if ! exists('g:DropQuery_NoPopup')
     let g:DropQuery_NoPopup = 0
 endif
 if ! exists('g:DropQuery_MoveAwayPredicates')
-    let g:DropQuery_MoveAwayPredicates = ['&buftype ==# "terminal"']
+    let g:DropQuery_MoveAwayPredicates = []
+endif
+if ! exists('g:DropQuery_ExemptPredicates')
+    let g:DropQuery_ExemptPredicates = ['&buftype ==# "terminal"']
 endif
 if ! exists('g:DropQuery_PopupFocusCommand')
     " Focus on the popup dialog requires that activation of Vim from the
