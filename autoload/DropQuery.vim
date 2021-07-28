@@ -543,17 +543,27 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isEmpty )
+function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isCurrentWindowAvailable, isEmpty )
     let l:dropAttributes = {'readonly': 0}
 
+    let l:editAction = (a:isCurrentWindowAvailable ? '&edit' : '')
     let l:otherVims = s:GetOtherVims()
-    let l:actions = ['&edit', '&split', '&vsplit', '&preview', '&only', (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'), 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...')]
+    let l:actions = []
+    if ! empty(l:editAction)
+	call add(l:actions, l:editAction)
+    endif
+    call extend(l:actions, ['&split', '&vsplit', '&preview'])
+    if a:hasOtherWindows && ! empty(l:editAction)
+	call add(l:actions, '&only')
+    endif
+    call add(l:actions, (tabpagenr('$') == 1 ? 'new &tab' : '&tab...'))
+    call add(l:actions, 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...'))
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
 	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val !=# "&preview"')
     endif
-    if a:isInBuffer
+    if a:isInBuffer && ! empty(l:editAction)
 	call remove(l:actions, 0)
     endif
     let l:previewIdx = index(l:actions, '&preview')
@@ -1263,6 +1273,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
 	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr()),
+	\   ! s:IsExempt(),
 	\   l:isEmpty
 	\)
     endif
