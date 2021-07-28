@@ -84,11 +84,21 @@ The plugin uses a pop-up dialog in GVIM for the query. To use a textual query
 This does not cover the :confirm query "Save changes to...?" when abandoning
 modified buffers.
 
-To exempt certain windows from being targets for direct dropping, and move
-away from them before querying for a drop action, you can define predicate
-expressions or Funcrefs to characterize such windows in the following List:
+To exempt certain windows from being the base window for the offered drop
+actions, and therefore move away from them before querying for a drop action,
+you can define predicate expressions or Funcrefs to characterize such windows
+in the following List:
 
     let g:DropQuery_MoveAwayPredicates = ["&filetype == 'scratch'"]
+
+This is useful if you have any plugins that create vertical sidebars (e.g.
+Tagbar), so you want to move to the (horizontally split) main window(s) first.
+
+To exempt certain windows from being offered as targets for direct dropping
+("Edit" / "View"), you can define predicate expressions or Funcrefs to
+characterize such windows in the following List:
+
+    let g:DropQuery_ExemptPredicates = ['&buftype ==# "terminal"']
 
 By default, the plugin moves away from |terminal-window|s, assuming you don't
 want to replace a running session with an opened file.
