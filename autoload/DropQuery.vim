@@ -398,7 +398,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     endif
     if s:isLastDropToArgList
 	" Move to the front; it's likely that the next file is meant to be added, too.
-	let l:actions = ['&argadd'] + filter(l:actions, 'v:val != "&argadd"')
+	let l:actions = ['&argadd'] + filter(l:actions, 'v:val !=# "&argadd"')
     endif
     if &l:previewwindow
 	if winnr('$') > winnr() && ! ingo#window#special#IsSpecialWindow(winnr() + 1)
@@ -410,7 +410,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	else
 	    " Move the preview action to the front, and remove the superfluous
 	    " equivalent edit action.
-	    let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+	    let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val !=# "&preview"')
 	endif
     endif
     if a:isInBuffer
@@ -494,7 +494,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum )
 
     let l:blankWindowNr = s:GetBlankWindowNr()
     if l:blankWindowNr != -1 && l:blankWindowNr == winnr() && argc() == 0
-	call filter(l:actions, 'v:val != "&argadd"')
+	call filter(l:actions, 'v:val !=# "&argadd"')
     endif
 
     call s:QueryActionForArguments(l:actions, 1)
@@ -541,7 +541,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
     if &l:previewwindow
 	" When the current window is the preview window, move that action to the
 	" front, and remove the superfluous equivalent edit action.
-	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val != "&preview"')
+	let l:actions = ['&preview'] + filter(l:actions[1:], 'v:val !=# "&preview"')
     endif
     if a:isInBuffer
 	call remove(l:actions, 0)
