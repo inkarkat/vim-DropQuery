@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2021 Ingo Karkat
+" Copyright: (C) 2005-2022 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -1183,11 +1183,8 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
-	    " Note: Cannot use tabpagenr('$') here, as each file will increase
-	    " it, but the expression isn't reevaluated. Just use a very large
-	    " value to force adding as the last tab page for each one.
 	    call s:ExecuteForEachFile(
-	    \	tabpagenr('$') . 'tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
+	    \	'$tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
