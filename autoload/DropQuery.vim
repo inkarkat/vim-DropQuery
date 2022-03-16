@@ -269,6 +269,14 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ...
 "*******************************************************************************
     let l:afterExcommand = (a:0 ? a:1 : '')
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
+
+    if l:excommand[0] ==# '$' && v:version < 800 || v:version == 800 && ! has('patch259')
+	" Compatibility: Prior to Vim 8.0.259, :$tabedit did not work; up to Vim
+	" 7.4.565 a large count could simply be used, but need to use the last
+	" tab page number after that.
+	let l:excommand = tabpagenr('$') . l:excommand[1:]
+    endif
+
     for l:filespec in a:filespecs
 	execute l:excommand ingo#compat#fnameescape(s:ShortenFilespec(l:filespec))
 	let l:excommand = a:excommand
