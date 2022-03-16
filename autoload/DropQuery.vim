@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2021 Ingo Karkat
+" Copyright: (C) 2005-2022 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -269,6 +269,14 @@ function! s:ExecuteForEachFile( excommand, specialFirstExcommand, filespecs, ...
 "*******************************************************************************
     let l:afterExcommand = (a:0 ? a:1 : '')
     let l:excommand = empty(a:specialFirstExcommand) ? a:excommand : a:specialFirstExcommand
+
+    if l:excommand[0] ==# '$' && v:version < 800 || v:version == 800 && ! has('patch259')
+	" Compatibility: Prior to Vim 8.0.259, :$tabedit did not work; up to Vim
+	" 7.4.565 a large count could simply be used, but need to use the last
+	" tab page number after that.
+	let l:excommand = tabpagenr('$') . l:excommand[1:]
+    endif
+
     for l:filespec in a:filespecs
 	execute l:excommand ingo#compat#fnameescape(s:ShortenFilespec(l:filespec))
 	let l:excommand = a:excommand
@@ -1183,11 +1191,8 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'new tab'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
-	    " Note: Cannot use tabpagenr('$') here, as each file will increase
-	    " it, but the expression isn't reevaluated. Just use a very large
-	    " value to force adding as the last tab page for each one.
 	    call s:ExecuteForEachFile(
-	    \	tabpagenr('$') . 'tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
+	    \	'$tabedit' . l:exFileOptionsAndCommands . (l:dropAttributes.readonly ? ' +setlocal\ readonly' : ''),
 	    \	(s:IsEmptyTabPage() ? (l:dropAttributes.readonly ? 'view' : 'edit') . l:exFileOptionsAndCommands : ''),
 	    \	l:filespecs
 	    \)
