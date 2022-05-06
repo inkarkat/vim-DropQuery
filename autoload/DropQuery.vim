@@ -397,9 +397,12 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     if ! empty(l:editAction)
 	call add(l:actions, l:editAction)
     endif
-    call extend(l:actions, ['&split', 'a&bove', '&vsplit', '&preview', '&argadd', 'ar&gedit'])
-    if a:hasOtherWindows && ! empty(l:editAction)
-	call add(l:actions, '&only')
+    call extend(l:actions, ['&split', 'a&bove', '&vsplit', '&preview', '&argadd'])
+    if ! empty(l:editAction)
+	call add(l:actions, 'ar&gedit')
+	if a:hasOtherWindows
+	    call add(l:actions, '&only')
+	endif
     endif
     call add(l:actions, 'e&xternal GVIM'.(empty(l:otherVims) ? '' : '...'))
     if a:hasOtherWindows
