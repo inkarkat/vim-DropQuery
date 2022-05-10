@@ -464,7 +464,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     endif
     call s:QueryActionForArguments(l:actions, 0)
     if a:hasOtherBuffers
-	call insert(l:actions, '&fresh', max([index(l:actions, '&only'), index(l:actions, 'ar&gedit')]) + 1)
+	call insert(l:actions, '&fresh', max([index(l:actions, '&only'), index(l:actions, 'ar&gedit'), index(l:actions, '&argadd')]) + 1)
     endif
     if a:isExisting && ! a:isBlankWindow && ! a:isInBuffer
 	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
