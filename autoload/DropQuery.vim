@@ -328,7 +328,7 @@ function! s:BuildQueryText( filespecs, statistics )
     endif
 endfunction
 function! s:QueryActionForArguments( actions, isMultipleFiles )
-    let l:idx = index(a:actions, 'ar&gedit')
+    let l:idx = max([index(a:actions, 'ar&gedit'), index(a:actions, '&argadd')])
     if argc() == 0 && ! empty(bufname('')) && winnr('$') == 1
 	" There is only the current buffer (which might have been :Drop'ed
 	" before). As the plugin doesn't ask for the first buffer (and just
@@ -459,7 +459,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	endif
 	call add(l:actions, '&readonly and ask again')
 	if ! a:isLoaded
-	    call insert(l:actions, 'badd', index(l:actions, 'ar&gedit') + 1)
+	    call insert(l:actions, 'badd', max([index(l:actions, 'ar&gedit'), index(l:actions, '&argadd')]) + 1)
 	endif
     endif
     call s:QueryActionForArguments(l:actions, 0)
