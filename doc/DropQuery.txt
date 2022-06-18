@@ -99,6 +99,11 @@ in the following List: >
 This is useful if you have any plugins that create vertical sidebars (e.g.
 Tagbar), so you want to move to the (horizontally split) main window(s) first.
 
+If no other window is available, a window that is covered by the predicate can
+still be used as the base for dropping. The following configuration offers a
+mandatory exemption instead. (This can be combined with the above, to try to
+move away but if it fails still not offer the window.)
+
 						*g:DropQuery_ExemptPredicates*
 To exempt certain windows from being offered as targets for direct dropping
 ("Edit" / "View"), you can define predicate expressions or Funcrefs to
@@ -143,7 +148,7 @@ First published version.
 Started development.
 
 ==============================================================================
-Copyright: (C) 2005-2021 Ingo Karkat
+Copyright: (C) 2005-2022 Ingo Karkat
 The VIM LICENSE applies to this plugin; see |copyright|.
 
 Maintainer:	Ingo Karkat <ingo@karkat.de>
