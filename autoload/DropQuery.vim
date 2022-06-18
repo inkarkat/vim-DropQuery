@@ -506,9 +506,13 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForMultipleFiles( querytext, fileNum )
+function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvailable )
     let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
-    let l:actions = ['&argadd', 'ar&gedit', '&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually']
+    let l:actions = ['&argadd']
+    if a:isCurrentWindowAvailable
+	call add(l:actions, 'ar&gedit')
+    endif
+    call extend(l:actions, ['&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually'])
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
     endif
@@ -1068,7 +1072,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     let l:originalWinNr = winnr()
     let l:previousWinNr = winnr('#') ? winnr('#') : 1
     let l:isMovedAway = s:MoveAwayAndRefresh()
-    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files)
+    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files, s:IsExempt())
 
     let l:exFileOptionsAndCommands = ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine(l:fileOptionsAndCommands)
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)
