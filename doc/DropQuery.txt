@@ -109,8 +109,9 @@ To exempt certain windows from being offered as targets for direct dropping
 ("Edit" / "View"), you can define predicate expressions or Funcrefs to
 characterize such windows in the following List: >
     let g:DropQuery_ExemptPredicates = ['&buftype ==# "terminal"']
-By default, the plugin moves away from |terminal-window|s, assuming you don't
-want to replace a running session with an opened file.
+By default, the plugin does not offer use of |terminal-window|s, assuming you
+don't want to replace a running session with an opened file.
+
 					       *g:DropQuery_FilespecProcessor*
 If you want to process individual filespecs passed to |:Drop|, you can hook in
 a processor function that takes a single filespec (or file glob), and returns
