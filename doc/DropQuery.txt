@@ -72,7 +72,7 @@ To uninstall, use the |:RmVimball| command.
 DEPENDENCIES					      *DropQuery-dependencies*
 
 - Requires Vim 7.0 or higher.
-- Requires the |ingo-library.vim| plugin (vimscript #4433), version 1.043 or
+- Requires the |ingo-library.vim| plugin (vimscript #4433), version 1.045 or
   higher.
 
 ==============================================================================
@@ -122,6 +122,24 @@ this changed or unchanged: >
     endfunction
     let g:DropQuery_FilespecProcessor = function('MyFilespecProcessor')
 <
+						     *g:DropQuery_AutoActions*
+If you want to skip the querying for certain filespecs, you can define
+automatic actions, either as Funcrefs that take a List of filespecs and return
+[dropAction, dropAttributes] (or an empty List to do the querying, or throwing
+an exception to abort), or [glob, dropAction, dropAttributes] Lists that
+activate when all filespec(s) match the glob: >
+    function! MyAutoAction( files )
+	return (len(a:files) == 1 && fnamemodify(a:files[0], ':e') ==# 'txt'
+	\   ? ['tabnr', {'tabnr': 1}]
+	\   : []
+	\)
+    endfunction
+    let g:DropQuery_AutoActions = [
+    \	['*.vim', 'split', {}],
+    \	function('MyAutoAction')
+    \]
+<
+
 ==============================================================================
 INTEGRATION					       *DropQuery-integration*
 
