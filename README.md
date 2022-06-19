@@ -135,6 +135,22 @@ activate when all filespec(s) match the glob:
     \   function('MyAutoAction')
     \]
 
+If you want to set the proposed default action for certain filespecs, you can
+define automatic defaults, either as Funcrefs that take a List of filespecs
+and return the default (or an empty String), or [glob, default] Lists that
+activate when all filespec(s) match the glob:
+
+    function! MyAutoDefault( files )
+        return (len(a:files) == 1 && fnamemodify(a:files(0), ':e') ==# 'vim'
+        \   ? 'split'
+        \   : ''
+        \)
+    endfunction
+    let g:DropQuery_AutoDefaults = [
+    \   ['*.vim', 'split']
+    \   function('MyAutoDefault')
+    \]
+
 CONTRIBUTING
 ------------------------------------------------------------------------------
 

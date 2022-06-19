@@ -46,6 +46,9 @@ endif
 if ! exists('g:DropQuery_AutoActions')
     let g:DropQuery_AutoActions = []
 endif
+if ! exists('g:DropQuery_AutoDefaults')
+    let g:DropQuery_AutoDefaults = []
+endif
 
 
 
