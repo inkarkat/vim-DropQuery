@@ -11,6 +11,7 @@
 let s:save_cpo = &cpo
 set cpo&vim
 
+let s:defaultDropAttributes = {'readonly': 0, 'fresh' : 0}
 let s:isLastDropToArgList = 0
 function! s:IsVisibleWindow( filespec )
     let l:winNr = bufwinnr(ingo#escape#file#bufnameescape(a:filespec))
@@ -382,8 +383,8 @@ function! s:QueryTab( querytext, dropAttributes )
     endif
     return l:dropAction
 endfunction
-function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isCurrentWindowAvailable )
-    let l:dropAttributes = {'readonly': 0}
+function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, hasOtherWindows, hasOtherDiffWindow, isVisibleWindow, isLoaded, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isCurrentWindowAvailable, default )
+    let l:dropAttributes = copy(s:defaultDropAttributes)
 
     " The :edit command can be used to both edit an existing file and create a
     " new file. We'd like to distinguish between the two in the query, however.
@@ -486,7 +487,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
     endif
 
     while 1
-	let l:dropAction = s:Query(a:querytext, l:actions, 1)
+	let l:dropAction = s:Query(a:querytext, l:actions, a:default)
 	if l:dropAction ==# 'readonly and ask again'
 	    let l:dropAttributes.readonly = 1
 	    call filter(l:actions, 'v:val !~# "^.\\?readonly"')
@@ -506,8 +507,8 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 
     return [l:dropAction, l:dropAttributes]
 endfunction
-function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvailable )
-    let l:dropAttributes = {'readonly': 0, 'fresh' : 0}
+function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvailable, default )
+    let l:dropAttributes = copy(s:defaultDropAttributes)
     let l:actions = ['&argadd']
     if a:isCurrentWindowAvailable
 	call add(l:actions, 'ar&gedit')
@@ -537,7 +538,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvai
     if a:fileNum > &columns | call filter(l:actions, 'v:val !=# "&vsplit"') | endif
 
     while 1
-	let l:dropAction = s:Query(a:querytext, l:actions, 1)
+	let l:dropAction = s:Query(a:querytext, l:actions, a:default)
 	if l:dropAction ==# 'open new tab and ask again'
 	    execute tabpagenr('$') . 'tabnew'
 	    redraw! " Without this, the new blank tab page isn't visible.
@@ -559,7 +560,7 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvai
     return [l:dropAction, l:dropAttributes]
 endfunction
 function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, isVisibleWindow, isInBuffer, isOpenInAnotherTabPage, isBlankWindow, isCurrentWindowAvailable, isEmpty )
-    let l:dropAttributes = {'readonly': 0}
+    let l:dropAttributes = copy(s:defaultDropAttributes)
 
     let l:editAction = (a:isCurrentWindowAvailable ? '&edit' : '')
     let l:otherVims = s:GetOtherVims()
@@ -725,6 +726,57 @@ function! s:EchoArgsSummary( whatAdded ) abort
     echomsg printf('Now %d argument%s, added %s', argc(), (argc() == 1 ? '' : 's'), a:whatAdded)
 endfunction
 
+function! s:GetAutoAction( filespecs ) abort
+    for l:AutoAction in g:DropQuery_AutoActions
+	if type(l:AutoAction) == type(function('tr'))
+	    let l:result = call(l:AutoAction, [a:filespecs])
+	    if ! empty(l:result)
+		return l:result
+	    endif
+	elseif type(l:AutoAction) == type([])
+	    let [l:glob, l:result] = [l:AutoAction[0], l:AutoAction[1:2]]
+	    let l:globPattern = ingo#regexp#fromwildcard#FileOrPath(l:glob)
+	    for l:filespec in a:filespecs
+		if l:filespec !~# l:globPattern
+		    let l:result = []
+		    break
+		endif
+	    endfor
+	    if ! empty(l:result)
+		return l:result
+	    endif
+	else
+	    throw 'Wrong type in g:DropQuery_AutoActions; not a Funcref or List: ' . string(l:AutoAction)
+	endif
+    endfor
+    return ['', {}]
+endfunction
+function! s:GetAutoDefault( filespecs ) abort
+    for l:AutoDefault in g:DropQuery_AutoDefaults
+	if type(l:AutoDefault) == type(function('tr'))
+	    let l:default = call(l:AutoDefault, [a:filespecs])
+	    if ! empty(l:default)
+		return l:default
+	    endif
+	elseif type(l:AutoDefault) == type([])
+	    let [l:glob, l:default] = l:AutoDefault
+	    let l:globPattern = ingo#regexp#fromwildcard#FileOrPath(l:glob)
+	    for l:filespec in a:filespecs
+		if l:filespec !~# l:globPattern
+		    let l:default = ''
+		    break
+		endif
+	    endfor
+	    if ! empty(l:default)
+		return l:default
+	    endif
+	else
+	    throw 'Wrong type in g:DropQuery_AutoDefaults; not a Funcref or List: ' . string(l:AutoDefault)
+	endif
+    endfor
+    return ''
+endfunction
+
 function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileOptionsAndCommands )
 "*******************************************************************************
 "* PURPOSE:
@@ -751,7 +803,6 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 "****D echomsg '**** Dropped filespec' string(a:filespec) 'options' string(a:fileOptionsAndCommands)
     let l:exfilespec = ingo#compat#fnameescape(s:ShortenFilespec(a:filespec))
     let l:exFileOptionsAndCommands = ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine(a:fileOptionsAndCommands)
-    let l:dropAttributes = {'readonly': 0}
 "****D echomsg '****' string(l:exFileOptionsAndCommands) string(l:exfilespec)
     let l:originalBufNr = bufnr('')
     let l:originalWinNr = winnr()
@@ -759,7 +810,20 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
     let l:isMovedAway = 0
     let l:isVisibleWindow = s:IsVisibleWindow(a:filespec)
     let l:tabPageNr = s:GetTabPageNr(bufnr(ingo#escape#file#bufnameescape(a:filespec)))
-    if ! a:isForceQuery && s:IsEmptyTabPage() && l:tabPageNr == -1
+
+    try
+	let [l:dropAction, l:dropAttributes] = s:GetAutoAction([a:filespec])
+	let l:dropAttributes = extend(copy(l:dropAttributes), s:defaultDropAttributes)
+    catch /^Vim\%((\a\+)\)\=:/
+	throw ingo#msg#MsgFromVimException()   " Don't swallow Vimscript errors.
+    catch
+	call ingo#msg#ErrorMsg(v:exception)    " A custom exception indicates abort.
+	return -1
+    endtry
+
+    if ! empty(l:dropAction)
+	" Action is provided by the auto action.
+    elseif ! a:isForceQuery && s:IsEmptyTabPage() && l:tabPageNr == -1
 	let l:dropAction = 'edit'
     elseif ! a:isForceQuery && l:isVisibleWindow
 	let l:dropAction = 'goto window'
@@ -771,6 +835,7 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	let l:isLoaded = (l:bufNr != -1)
 	let l:isInBuffer = (l:bufNr == bufnr(''))
 	let l:isMovedAway = s:MoveAwayAndRefresh()
+	let l:default = s:GetAutoDefault([a:filespec])
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForSingleFile(
 	\   (l:isInBuffer ? substitute(a:querytext, '^\CAction for ', '&this buffer ', '') : a:querytext),
 	\   a:isExisting,
@@ -782,7 +847,8 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	\   l:isInBuffer,
 	\   (l:tabPageNr != -1),
 	\   (l:blankWindowNr != -1 && l:blankWindowNr != winnr()),
-	\   ! s:IsExempt()
+	\   ! s:IsExempt(),
+	\   (empty(l:default) ? 1 : l:default)
 	\)
     endif
 
@@ -1072,7 +1138,25 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
     let l:originalWinNr = winnr()
     let l:previousWinNr = winnr('#') ? winnr('#') : 1
     let l:isMovedAway = s:MoveAwayAndRefresh()
-    let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(s:BuildQueryText(l:filespecs, l:statistics), l:statistics.files, s:IsExempt())
+
+    try
+	let [l:dropAction, l:dropAttributes] = s:GetAutoAction(l:filespecs)
+	let l:dropAttributes = extend(copy(l:dropAttributes), s:defaultDropAttributes)
+    catch /^Vim\%((\a\+)\)\=:/
+	throw ingo#msg#MsgFromVimException()   " Don't swallow Vimscript errors.
+    catch
+	call ingo#msg#ErrorMsg(v:exception)    " A custom exception indicates abort.
+	return -1
+    endtry
+    if empty(l:dropAction)
+	let l:default = s:GetAutoDefault(l:filespecs)
+	let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(
+	\   s:BuildQueryText(l:filespecs, l:statistics),
+	\   l:statistics.files,
+	\   s:IsExempt(),
+	\   (empty(l:default) ? 1 : l:default)
+	\)
+    endif
 
     let l:exFileOptionsAndCommands = ingo#cmdargs#file#FileOptionsAndCommandsToEscapedExCommandLine(l:fileOptionsAndCommands)
     let l:exFileOptionsAndCommands = (empty(l:exFileOptionsAndCommands) ? '' : ' ' . l:exFileOptionsAndCommands)

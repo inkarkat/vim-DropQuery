@@ -62,7 +62,7 @@ To uninstall, use the :RmVimball command.
 ### DEPENDENCIES
 
 - Requires Vim 7.0 or higher.
-- Requires the ingo-library.vim plugin ([vimscript #4433](http://www.vim.org/scripts/script.php?script_id=4433)), version 1.043 or
+- Requires the ingo-library.vim plugin ([vimscript #4433](http://www.vim.org/scripts/script.php?script_id=4433)), version 1.045 or
   higher.
 
 CONFIGURATION
@@ -94,14 +94,19 @@ in the following List:
 This is useful if you have any plugins that create vertical sidebars (e.g.
 Tagbar), so you want to move to the (horizontally split) main window(s) first.
 
+If no other window is available, a window that is covered by the predicate can
+still be used as the base for dropping. The following configuration offers a
+mandatory exemption instead. (This can be combined with the above, to try to
+move away but if it fails still not offer the window.)
+
 To exempt certain windows from being offered as targets for direct dropping
 ("Edit" / "View"), you can define predicate expressions or Funcrefs to
 characterize such windows in the following List:
 
     let g:DropQuery_ExemptPredicates = ['&buftype ==# "terminal"']
 
-By default, the plugin moves away from |terminal-window|s, assuming you don't
-want to replace a running session with an opened file.
+By default, the plugin does not offer use of |terminal-window|s, assuming you
+don't want to replace a running session with an opened file.
 
 If you want to process individual filespecs passed to :Drop, you can hook in
 a processor function that takes a single filespec (or file glob), and returns
@@ -112,6 +117,39 @@ this changed or unchanged:
         return substitute(a:filespec, '^X:', 'C:\Windows', '')
     endfunction
     let g:DropQuery_FilespecProcessor = function('MyFilespecProcessor')
+
+If you want to skip the querying for certain filespecs, you can define
+automatic actions, either as Funcrefs that take a List of filespecs and return
+[dropAction, dropAttributes] (or an empty List to do the querying, or throwing
+an exception to abort), or [glob, dropAction, dropAttributes] Lists that
+activate when all filespec(s) match the glob:
+
+    function! MyAutoAction( files )
+        return (len(a:files) == 1 && fnamemodify(a:files[0], ':e') ==# 'txt'
+        \   ? ['tabnr', {'tabnr': 1}]
+        \   : []
+        \)
+    endfunction
+    let g:DropQuery_AutoActions = [
+    \   ['*.vim', 'split', {}],
+    \   function('MyAutoAction')
+    \]
+
+If you want to set the proposed default action for certain filespecs, you can
+define automatic defaults, either as Funcrefs that take a List of filespecs
+and return the default (or an empty String), or [glob, default] Lists that
+activate when all filespec(s) match the glob:
+
+    function! MyAutoDefault( files )
+        return (len(a:files) == 1 && fnamemodify(a:files[0], ':e') ==# 'md'
+        \   ? 'window...'
+        \   : ''
+        \)
+    endfunction
+    let g:DropQuery_AutoDefaults = [
+    \   ['.vimrc', 'vsplit'],
+    \   function('MyAutoDefault')
+    \]
 
 CONTRIBUTING
 ------------------------------------------------------------------------------
@@ -129,7 +167,7 @@ First published version.
 - Started development.
 
 ------------------------------------------------------------------------------
-Copyright: (C) 2005-2021 Ingo Karkat -
+Copyright: (C) 2005-2022 Ingo Karkat -
 The [VIM LICENSE](http://vimdoc.sourceforge.net/htmldoc/uganda.html#license) applies to this plugin.
 
 Maintainer:     Ingo Karkat &lt;ingo@karkat.de&gt;

@@ -6,7 +6,7 @@
 "   - Requires Vim 7.0 or higher.
 "   - ingo-library.vim plugin
 "
-" Copyright: (C) 2005-2021 Ingo Karkat
+" Copyright: (C) 2005-2022 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 
 " Avoid installing twice or when in unsupported Vim version.
@@ -42,6 +42,12 @@ if ! exists('g:DropQuery_PopupFocusCommand')
 endif
 if ! exists('g:DropQuery_FilespecProcessor')
     let g:DropQuery_FilespecProcessor = ''
+endif
+if ! exists('g:DropQuery_AutoActions')
+    let g:DropQuery_AutoActions = []
+endif
+if ! exists('g:DropQuery_AutoDefaults')
+    let g:DropQuery_AutoDefaults = []
 endif
 
 
