@@ -1153,7 +1153,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	let [l:dropAction, l:dropAttributes] = s:QueryActionForMultipleFiles(
 	\   s:BuildQueryText(l:filespecs, l:statistics),
 	\   l:statistics.files,
-	\   s:IsExempt(),
+	\   ! s:IsExempt(),
 	\   (empty(l:default) ? 1 : l:default)
 	\)
     endif
