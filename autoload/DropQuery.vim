@@ -399,7 +399,9 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	call add(l:actions, l:editAction)
     endif
     call extend(l:actions, ['&split', 'a&bove', '&vsplit', '&preview', '&argadd'])
-    if ! empty(l:editAction)
+    if empty(l:editAction)
+	call add(l:actions, 'ar&gedit in split')
+    else
 	call add(l:actions, 'ar&gedit')
 	if a:hasOtherWindows
 	    call add(l:actions, '&only')
@@ -901,6 +903,14 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	    endif
 	elseif l:dropAction ==# 'argedit'
 	    execute 'confirm argedit' l:exFileOptionsAndCommands l:exfilespec
+	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
+		setlocal readonly
+	    endif
+	elseif l:dropAction ==# 'argedit in split'
+	    let l:argNum = argc()
+	    call s:ExecuteWithoutWildignore(l:argNum . 'argadd', [a:filespec])
+
+	    execute s:HorizontalSplitModifier() (l:argNum + 1) . 'sargument' l:exFileOptionsAndCommands
 	    if l:dropAttributes.readonly && bufnr('') != l:originalBufNr
 		setlocal readonly
 	    endif
