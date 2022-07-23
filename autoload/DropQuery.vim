@@ -513,6 +513,9 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvai
     if a:isCurrentWindowAvailable
 	call add(l:actions, 'ar&gedit')
     endif
+    if argc() > 0
+	call add(l:actions, 'replace existing args')
+    endif
     call extend(l:actions, ['&split', '&vsplit', 's&how', 'badd', 'add to &quickfix', '&new tab', 'e&xternal GVIM...', 'open new &tab and ask again', '&readonly and ask again', 'ask &individually'])
     if ingo#buffer#ExistOtherBuffers(-1)
 	call add(l:actions, '&fresh and ask again')
@@ -1199,6 +1202,15 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args' . l:exFileOptionsAndCommands, l:filespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
+	elseif l:dropAction ==# 'replace existing args'
+	    argdelete *
+	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
+
+	    call s:ExecuteWithoutWildignore('0argadd', l:filespecs)
+	    " :argadd just modifies the argument list; l:dropAttributes.readonly
+	    " doesn't apply here. l:fileOptionsAndCommands isn't supported,
+	    " neither.
+	    call s:EchoArgsSummary(len(l:filespecs) . ' files')
 	elseif l:dropAction ==# 'argadd'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
