@@ -514,6 +514,8 @@ function! s:QueryActionForMultipleFiles( querytext, fileNum, isCurrentWindowAvai
     let l:actions = ['&argadd']
     if a:isCurrentWindowAvailable
 	call add(l:actions, 'ar&gedit')
+    else
+	call add(l:actions, 'ar&gedit in split')
     endif
     if argc() > 0
 	call add(l:actions, 'replace existing args')
@@ -1212,6 +1214,11 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	elseif l:dropAction ==# 'argedit'
 	    call s:ExecuteWithoutWildignore('confirm args' . l:exFileOptionsAndCommands, l:filespecs)
 	    if l:dropAttributes.readonly | setlocal readonly | endif
+	elseif l:dropAction ==# 'argedit in split'
+	    let l:argNum = argc()
+	    call s:ExecuteWithoutWildignore(l:argNum . 'argadd', l:filespecs)
+
+	    execute s:HorizontalSplitModifier() (l:argNum + 1) . 'sargument' l:exFileOptionsAndCommands
 	elseif l:dropAction ==# 'replace existing args'
 	    argdelete *
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
