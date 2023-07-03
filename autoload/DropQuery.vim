@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2022 Ingo Karkat
+" Copyright: (C) 2005-2023 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -894,7 +894,7 @@ function! s:DropSingleFile( isForceQuery, filespec, isExisting, querytext, fileO
 	elseif l:dropAction ==# 'placement'
 	    execute l:dropAttributes.placement (l:dropAttributes.readonly ? 'sview' : 'split') l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'show'
-	    execute 'call TopLeftHook() | topleft sview' l:exFileOptionsAndCommands l:exfilespec
+	    execute (exists(':TopLeft') ==2 ? 'TopLeft' : 'topleft') 'sview' l:exFileOptionsAndCommands l:exfilespec
 	elseif l:dropAction ==# 'preview'
 	    call ingo#window#preview#OpenFilespec(a:filespec, {'isSilent': 0, 'isBang': 0, 'prefixCommand': 'confirm', 'exFileOptionsAndCommands': l:exFileOptionsAndCommands})
 	    " The :pedit command does not go to the preview window itself, but
@@ -1304,7 +1304,7 @@ function! DropQuery#Drop( isForceQuery, filePatternsString, rangeList )
 	    \)
 	elseif l:dropAction ==# 'show'
 	    call s:ExecuteForEachFile(
-	    \	'call TopLeftHook() | topleft sview' . l:exFileOptionsAndCommands,
+	    \	(exists(':TopLeft') ==2 ? 'TopLeft' : 'topleft') . ' sview' . l:exFileOptionsAndCommands,
 	    \	(s:IsEmptyTabPage() ? 'view' . l:exFileOptionsAndCommands : ''),
 	    \	reverse(l:filespecs)
 	    \)
@@ -1426,7 +1426,7 @@ function! DropQuery#DropBuffer( isForceQuery, bufNr, ... )
 	elseif l:dropAction ==# 'placement'
 	    execute l:dropAttributes.placement 'sbuffer' l:bufNr
 	elseif l:dropAction ==# 'show'
-	    execute 'call TopLeftHook() | topleft sbuffer' l:bufNr
+	    execute (exists(':TopLeft') ==2 ? 'TopLeft' : 'topleft') 'sbuffer' l:bufNr
 	elseif l:dropAction ==# 'preview'
 	    call s:RestoreMove(l:isMovedAway, l:originalWinNr, l:previousWinNr)
 
