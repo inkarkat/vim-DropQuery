@@ -6,7 +6,7 @@
 "   - ingo-library.vim plugin
 "   - :MoveChangesHere command (optional)
 "
-" Copyright: (C) 2005-2023 Ingo Karkat
+" Copyright: (C) 2005-2024 Ingo Karkat
 "   The VIM LICENSE applies to this script; see ':help copyright'.
 let s:save_cpo = &cpo
 set cpo&vim
@@ -476,7 +476,7 @@ function! s:QueryActionForSingleFile( querytext, isExisting, hasOtherBuffers, ha
 	call insert(l:actions, 'use &blank window')
     endif
     if a:isOpenInAnotherTabPage
-	call insert(l:actions, '&goto tab')
+	call insert(l:actions, 'goto tab')
     endif
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
@@ -602,7 +602,7 @@ function! s:QueryActionForBuffer( querytext, hasOtherBuffers, hasOtherWindows, i
 	call insert(l:actions, '&diffsplit', index(l:actions, '&preview'))
     endif
     if a:isOpenInAnotherTabPage
-	call insert(l:actions, '&goto tab')
+	call insert(l:actions, 'goto tab')
     endif
     if ! a:isInBuffer && a:isVisibleWindow
 	call insert(l:actions, '&goto window')
